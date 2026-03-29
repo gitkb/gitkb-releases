@@ -1,10 +1,10 @@
 # GitKB
 
-**The knowledge base your agents deserve.**
+**Knowledge engineering for software teams.**
 
-GitKB is a git-like knowledge base with code intelligence for AI-native development. It gives your AI agents persistent memory, structured task management, and deep code understanding — all local, all free.
+`git-kb` is a git-like CLI for knowledge engineering — the discipline of structuring, connecting, and distributing the knowledge that drives software development. It brings code intelligence, graph-connected documents, and persistent context to humans and AI agents alike.
 
-Your agents forget everything between sessions. GitKB is what's missing.
+[GitKB.com](https://gitkb.com) is the knowledge engineering platform built on top. Local and free forever. Cloud sync for teams coming soon.
 
 ## Install
 
