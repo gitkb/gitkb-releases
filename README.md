@@ -1,19 +1,23 @@
 # GitKB
 
-Git-native knowledge base with AI-powered code intelligence.
+**The knowledge base your agents deserve.**
+
+GitKB is a git-like knowledge base with code intelligence for AI-native development. It gives your AI agents persistent memory, structured task management, and deep code understanding — all local, all free.
+
+Your agents forget everything between sessions. GitKB is what's missing.
 
 ## Install
 
-### Quick install (macOS / Linux)
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/harmony-labs/gitkb-releases/main/install.sh | bash
-```
-
-### Homebrew
+### Homebrew (macOS / Linux)
 
 ```bash
 brew install harmony-labs/tap/gitkb
+```
+
+### Install script (macOS / Linux)
+
+```bash
+curl -fsSL https://get.gitkb.com/install.sh | bash
 ```
 
 ### Cargo binstall
@@ -22,17 +26,128 @@ brew install harmony-labs/tap/gitkb
 cargo binstall gitkb-cli
 ```
 
-### Specific version
+### Verify
 
 ```bash
-VERSION=0.1.0 curl -fsSL https://raw.githubusercontent.com/harmony-labs/gitkb-releases/main/install.sh | bash
+git kb --version
 ```
 
-## Usage
+## Quick Start
 
 ```bash
-git kb --help
+# Initialize in any project
+cd your-project
+git kb init
+
+# Index your code (17 languages supported)
+git kb code index .
+
+# Try it
+git kb code symbols --search "auth"
+git kb code callers authenticate
+git kb search "how does login work"
+
+# Create your first document
+git kb create --type task --title "Refactor auth module"
+git kb board
 ```
+
+## Connect to Your AI Editor
+
+GitKB exposes 42 MCP tools. Add to your editor config:
+
+**Claude Code** (`.claude/settings.json` or project `.mcp.json`):
+```json
+{
+  "mcpServers": {
+    "gitkb": {
+      "command": "git-kb",
+      "args": ["mcp"]
+    }
+  }
+}
+```
+
+Works with **Claude Code**, **Cursor**, **Cline**, **Windsurf**, and any MCP-compatible editor.
+
+### Claude Code Plugin
+
+```bash
+claude plugin marketplace add harmony-labs/gitkb-plugin
+claude plugin install gitkb@harmony-labs/gitkb-plugin
+```
+
+This adds 42 MCP tools, 4 skills, and 12 `/kb-*` slash commands.
+
+## What You Get
+
+### Knowledge Base
+
+Everything is a document — tasks, specs, incidents, architecture decisions, context. Markdown with YAML frontmatter. Linked with `[[wikilinks]]`. Version-controlled with BLAKE3 integrity.
+
+```bash
+git kb create --type task --title "Fix login timeout"
+git kb checkout tasks/fix-login-timeout
+# edit .kb/workspace/tasks/fix-login-timeout.md
+git kb commit -m "Add acceptance criteria"
+git kb board
+git kb graph tasks/fix-login-timeout
+```
+
+### Code Intelligence
+
+AST-based understanding across 17 languages. Not text search — structural analysis.
+
+```bash
+git kb code symbols --search "UserService"     # Find symbols
+git kb code callers UserService                 # Who calls this?
+git kb code callees UserService                 # What does it call?
+git kb code impact src/auth.rs                  # Blast radius
+git kb code dead src/                           # Find dead code
+```
+
+**Supported languages:** Rust, TypeScript, JavaScript, Python, Go, Java, C, C++, C#, Ruby, Kotlin, Swift, Scala, Elixir, Lua, PHP, Haskell
+
+### Persistent Agent Memory
+
+AI agents lose context between sessions. GitKB preserves it:
+
+- **Context documents** — project brief, architecture, tech stack, active work
+- **Task tracking** — kanban board, status workflows, acceptance criteria
+- **Code-to-knowledge links** — documents reference symbols, commits reference tasks
+- **Session handoff** — `/kb-handoff` captures what was done and what's next
+
+### 42 MCP Tools
+
+Full read/write access to the knowledge base for any AI agent:
+
+| Category | Examples |
+|----------|---------|
+| Documents | `kb_create`, `kb_show`, `kb_list`, `kb_search`, `kb_commit` |
+| Board & Graph | `kb_board`, `kb_graph`, `kb_smart_context` |
+| Code Intel | `kb_symbols`, `kb_callers`, `kb_callees`, `kb_impact`, `kb_dead_code` |
+| AI | `kb_semantic`, `kb_search` |
+
+## Documentation
+
+- [Getting Started](https://gitkb.com/docs/getting-started/quick-start/)
+- [Installation](https://gitkb.com/docs/getting-started/installation/)
+- [MCP Setup](https://gitkb.com/docs/getting-started/mcp-setup/)
+- [Claude Code Guide](https://gitkb.com/docs/getting-started/claude-code/)
+- [Code Intelligence](https://gitkb.com/docs/core-concepts/code-intelligence/)
+- [CLI Reference](https://gitkb.com/docs/cli-reference/)
+
+## Cloud Sync (Coming Soon)
+
+GitKB works fully offline. Cloud sync for teams is coming:
+
+```bash
+git kb login
+git kb push
+git kb pull
+```
+
+[Join the alpha →](https://gitkb.com/local-alpha)
 
 ## License
 
