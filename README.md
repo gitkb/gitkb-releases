@@ -117,14 +117,14 @@ git kb code dead src/                           # Find dead code
 
 **Supported languages:** Rust, TypeScript, JavaScript, Python, Go, Java, C, C++, C#, Ruby, Kotlin, Swift, Scala, Elixir, Lua, PHP, Haskell
 
-### Persistent Agent Memory
+### A Home for Everything That Isn't Code
 
-AI agents lose context between sessions. GitKB preserves it:
+Specs, ADRs, runbooks, incident reports, design decisions, architecture docs — engineering teams produce a growing corpus of documents that have no proper home. They end up scattered across Google Docs, Notion, wikis, or random markdown files in repos. GitKB gives them a single place: versioned, linked to code, and queryable by both humans and agents.
 
-- **Context documents** — project brief, architecture, tech stack, active work
+- **Typed documents** — tasks, specs, incidents, epics, notes, context, each with structured frontmatter
+- **Graph-connected** — `[[wikilinks]]` link documents to each other and to code symbols
 - **Task tracking** — kanban board, status workflows, acceptance criteria
-- **Code-to-knowledge links** — documents reference symbols, commits reference tasks
-- **Session handoff** — `/kb-handoff` captures what was done and what's next
+- **Persistent agent memory** — context documents, session handoff, work that survives across sessions
 
 ### 42 MCP Tools
 
