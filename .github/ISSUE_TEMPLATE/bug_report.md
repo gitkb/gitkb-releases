@@ -19,7 +19,7 @@ assignees: ""
 ```
 
 **Environment**
-- OS: 
-- `git kb --version`: 
-- Install method (brew / install script / cargo binstall): 
-- Editor (if MCP-related): 
+- OS:
+- `git kb --version`:
+- Install method (brew / install script / cargo binstall):
+- Editor (if MCP-related):

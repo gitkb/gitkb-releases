@@ -83,7 +83,7 @@ See [the Claude Code guide](https://gitkb.com/docs/getting-started/claude-code/)
 | Homebrew | `brew install harmony-labs/tap/gitkb` |
 | Install script | `curl -fsSL https://get.gitkb.com/install.sh \| bash` |
 | Cargo binstall | `cargo binstall gitkb-cli` |
-| Specific version | `VERSION=0.1.38 curl -fsSL https://get.gitkb.com/install.sh \| bash` |
+| Specific version | `VERSION=x.y.z curl -fsSL https://get.gitkb.com/install.sh \| bash` |
 
 Checksums are published on the [releases page](https://github.com/harmony-labs/gitkb-releases/releases).
 
