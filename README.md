@@ -26,6 +26,14 @@ curl -fsSL https://get.gitkb.com/install.sh | bash
 cargo binstall gitkb-cli
 ```
 
+### Specific version
+
+```bash
+VERSION=0.1.38 curl -fsSL https://get.gitkb.com/install.sh | bash
+```
+
+Checksums for each release are published on the [GitHub releases page](https://github.com/harmony-labs/gitkb-releases/releases).
+
 ### Verify
 
 ```bash
@@ -72,12 +80,13 @@ Works with **Claude Code**, **Cursor**, **Cline**, **Windsurf**, and any MCP-com
 
 ### Claude Code Plugin
 
+If you use Claude Code, install the GitKB plugin for skills and `/kb-*` slash commands:
+
 ```bash
-claude plugin marketplace add harmony-labs/gitkb-plugin
-claude plugin install gitkb@harmony-labs/gitkb-plugin
+claude mcp add gitkb -- git-kb mcp
 ```
 
-This adds 42 MCP tools, 4 skills, and 12 `/kb-*` slash commands.
+Or add the MCP config above manually. Both approaches give you 42 MCP tools. The plugin additionally provides 4 skills and 12 `/kb-*` slash commands — see [the Claude Code guide](https://gitkb.com/docs/getting-started/claude-code/) for details.
 
 ## What You Get
 
@@ -123,10 +132,10 @@ Full read/write access to the knowledge base for any AI agent:
 
 | Category | Examples |
 |----------|---------|
-| Documents | `kb_create`, `kb_show`, `kb_list`, `kb_search`, `kb_commit` |
+| Documents | `kb_create`, `kb_show`, `kb_list`, `kb_commit` |
 | Board & Graph | `kb_board`, `kb_graph`, `kb_smart_context` |
 | Code Intel | `kb_symbols`, `kb_callers`, `kb_callees`, `kb_impact`, `kb_dead_code` |
-| AI | `kb_semantic`, `kb_search` |
+| Search & AI | `kb_search`, `kb_semantic` |
 
 ## Documentation
 
