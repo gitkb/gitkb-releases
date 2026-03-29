@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Documentation
+    url: https://gitkb.com/docs
+    about: Check the docs before filing — your answer might already be there.
+  - name: Join the Alpha
+    url: https://gitkb.com/local-alpha
+    about: Sign up for early access to cloud sync and team features.
