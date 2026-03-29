@@ -2,9 +2,21 @@
 
 **Knowledge engineering for software teams.**
 
-`git-kb` is a git-like CLI for knowledge engineering — the discipline of structuring, connecting, and distributing the knowledge that drives software development. It brings code intelligence, graph-connected documents, and persistent context to humans and AI agents alike.
+Specs, ADRs, runbooks, incident reports, tasks, architecture decisions — engineering teams produce a growing corpus of knowledge that ends up scattered across Google Docs, Notion, wikis, or loose markdown files. `git-kb` gives it all a single home: versioned, graph-connected, queryable, and accessible to both humans and AI agents.
 
-[GitKB.com](https://gitkb.com) is the knowledge engineering platform built on top. Local and free forever. Cloud sync for teams coming soon.
+```bash
+brew install harmony-labs/tap/gitkb
+```
+
+## What It Does
+
+- **Knowledge base** — typed documents (tasks, specs, incidents, epics, context) with structured frontmatter, `[[wikilinks]]`, and version control with BLAKE3 integrity
+- **Code intelligence** — AST-based call graphs, impact analysis, and dead code detection across 17 languages via tree-sitter
+- **Graph** — every document and code symbol linked by typed relationships, traversable in milliseconds
+- **42 MCP tools** — full read/write access for Claude Code, Cursor, Cline, Windsurf, and any MCP-compatible editor
+- **Task tracking** — kanban board, status workflows, acceptance criteria
+- **Persistent agent memory** — context that survives across sessions, compactions, and handoffs
+- **Local-first** — everything runs on your machine, no account required, free forever
 
 ## Install
 
@@ -50,21 +62,22 @@ git kb init
 # Index your code (17 languages supported)
 git kb code index .
 
-# Try it
+# Query your codebase
 git kb code symbols --search "auth"
 git kb code callers authenticate
-git kb search "how does login work"
+git kb code impact src/auth.rs
 
-# Create your first document
+# Create and manage knowledge
 git kb create --type task --title "Refactor auth module"
 git kb board
+git kb search "how does login work"
 ```
 
 ## Connect to Your AI Editor
 
 GitKB exposes 42 MCP tools. Add to your editor config:
 
-**Claude Code** (`.claude/settings.json` or project `.mcp.json`):
+**Claude Code**, **Cursor**, **Cline**, **Windsurf** (`.mcp.json` in your project root):
 ```json
 {
   "mcpServers": {
@@ -76,66 +89,29 @@ GitKB exposes 42 MCP tools. Add to your editor config:
 }
 ```
 
-Works with **Claude Code**, **Cursor**, **Cline**, **Windsurf**, and any MCP-compatible editor.
-
-### Claude Code Plugin
-
-If you use Claude Code, install the GitKB plugin for skills and `/kb-*` slash commands:
-
+Or via the Claude Code CLI:
 ```bash
 claude mcp add gitkb -- git-kb mcp
 ```
 
-Or add the MCP config above manually. Both approaches give you 42 MCP tools. The plugin additionally provides 4 skills and 12 `/kb-*` slash commands — see [the Claude Code guide](https://gitkb.com/docs/getting-started/claude-code/) for details.
+### Claude Code Integration
 
-## What You Get
-
-### Knowledge Base
-
-Everything is a document — tasks, specs, incidents, architecture decisions, context. Markdown with YAML frontmatter. Linked with `[[wikilinks]]`. Version-controlled with BLAKE3 integrity.
+For the full experience — skills, rules, and 12 `/kb-*` slash commands:
 
 ```bash
-git kb create --type task --title "Fix login timeout"
-git kb checkout tasks/fix-login-timeout
-# edit .kb/workspace/tasks/fix-login-timeout.md
-git kb commit -m "Add acceptance criteria"
-git kb board
-git kb graph tasks/fix-login-timeout
+git kb init claude
 ```
 
-### Code Intelligence
+This scaffolds rules, skills, and commands that teach Claude how to use GitKB effectively. See [the Claude Code guide](https://gitkb.com/docs/getting-started/claude-code/) for details.
 
-AST-based understanding across 17 languages. Not text search — structural analysis.
+## MCP Tools
 
-```bash
-git kb code symbols --search "UserService"     # Find symbols
-git kb code callers UserService                 # Who calls this?
-git kb code callees UserService                 # What does it call?
-git kb code impact src/auth.rs                  # Blast radius
-git kb code dead src/                           # Find dead code
-```
-
-**Supported languages:** Rust, TypeScript, JavaScript, Python, Go, Java, C, C++, C#, Ruby, Kotlin, Swift, Scala, Elixir, Lua, PHP, Haskell
-
-### A Home for Everything That Isn't Code
-
-Specs, ADRs, runbooks, incident reports, design decisions, architecture docs — engineering teams produce a growing corpus of documents that have no proper home. They end up scattered across Google Docs, Notion, wikis, or random markdown files in repos. GitKB gives them a single place: versioned, linked to code, and queryable by both humans and agents.
-
-- **Typed documents** — tasks, specs, incidents, epics, notes, context, each with structured frontmatter
-- **Graph-connected** — `[[wikilinks]]` link documents to each other and to code symbols
-- **Task tracking** — kanban board, status workflows, acceptance criteria
-- **Persistent agent memory** — context documents, session handoff, work that survives across sessions
-
-### 42 MCP Tools
-
-Full read/write access to the knowledge base for any AI agent:
-
-| Category | Examples |
-|----------|---------|
-| Documents | `kb_create`, `kb_show`, `kb_list`, `kb_commit` |
+| Category | Tools |
+|----------|-------|
+| Documents | `kb_create`, `kb_show`, `kb_list`, `kb_commit`, `kb_checkout`, `kb_status`, `kb_diff` |
 | Board & Graph | `kb_board`, `kb_graph`, `kb_smart_context` |
 | Code Intel | `kb_symbols`, `kb_callers`, `kb_callees`, `kb_impact`, `kb_dead_code` |
-| Search & AI | `kb_search`, `kb_semantic` |
+| Search | `kb_search`, `kb_semantic` |
 
 ## Documentation
 
@@ -156,7 +132,7 @@ git kb push
 git kb pull
 ```
 
-[Join the alpha →](https://gitkb.com/local-alpha)
+[GitKB.com](https://gitkb.com) · [Join the alpha →](https://gitkb.com/local-alpha)
 
 ## License
 
