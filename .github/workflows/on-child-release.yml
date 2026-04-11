@@ -29,7 +29,7 @@ jobs:
         run: |
           mkdir -p release
           gh release download "${{ steps.info.outputs.tag }}" \
-            --repo harmony-labs/gitkb-core \
+            --repo gitkb/gitkb-core \
             --pattern "*.tar.gz" \
             --pattern "*.sha256" \
             --pattern "checksums.txt" \
@@ -45,12 +45,12 @@ jobs:
 
             Install via:
             ```bash
-            curl -fsSL https://raw.githubusercontent.com/harmony-labs/gitkb-releases/main/install.sh | bash
+            curl -fsSL https://raw.githubusercontent.com/gitkb/gitkb-releases/main/install.sh | bash
             ```
 
             Or via Homebrew:
             ```bash
-            brew install harmony-labs/tap/gitkb
+            brew install gitkb/tap/gitkb
             ```
           files: release/*
           fail_on_unmatched_files: true
@@ -84,9 +84,9 @@ jobs:
           PAYLOAD=$(jq -n \
             --arg title "GitKB $TAG Released" \
             --arg desc "A new version of GitKB is available." \
-            --arg install_sh 'curl -fsSL https://raw.githubusercontent.com/harmony-labs/gitkb-releases/main/install.sh | sh' \
-            --arg install_brew 'brew install harmony-labs/tap/gitkb' \
-            --arg url "https://github.com/harmony-labs/gitkb-releases/releases/tag/$TAG" \
+            --arg install_sh 'curl -fsSL https://raw.githubusercontent.com/gitkb/gitkb-releases/main/install.sh | sh' \
+            --arg install_brew 'brew install gitkb/tap/gitkb' \
+            --arg url "https://github.com/gitkb/gitkb-releases/releases/tag/$TAG" \
             '{
               embeds: [{
                 title: $title,
@@ -139,7 +139,7 @@ jobs:
         run: |
           mkdir -p checksums
           gh release download "${{ github.event.client_payload.tag }}" \
-            --repo harmony-labs/gitkb-core \
+            --repo gitkb/gitkb-core \
             --pattern "*.sha256" \
             --dir checksums
 
@@ -166,28 +166,28 @@ jobs:
 
           class Gitkb < Formula
             desc "Git-native knowledge base with AI-powered code intelligence"
-            homepage "https://github.com/harmony-labs/gitkb-releases"
+            homepage "https://github.com/gitkb/gitkb-releases"
             version "${{ steps.version.outputs.version }}"
             license "MIT"
 
             on_macos do
               on_arm do
-                url "https://github.com/harmony-labs/gitkb-releases/releases/download/v#{version}/gitkb-darwin-arm64.tar.gz"
+                url "https://github.com/gitkb/gitkb-releases/releases/download/v#{version}/gitkb-darwin-arm64.tar.gz"
                 sha256 "${{ steps.checksums.outputs.darwin_arm64 }}"
               end
               on_intel do
-                url "https://github.com/harmony-labs/gitkb-releases/releases/download/v#{version}/gitkb-darwin-x64.tar.gz"
+                url "https://github.com/gitkb/gitkb-releases/releases/download/v#{version}/gitkb-darwin-x64.tar.gz"
                 sha256 "${{ steps.checksums.outputs.darwin_x64 }}"
               end
             end
 
             on_linux do
               on_arm do
-                url "https://github.com/harmony-labs/gitkb-releases/releases/download/v#{version}/gitkb-linux-arm64.tar.gz"
+                url "https://github.com/gitkb/gitkb-releases/releases/download/v#{version}/gitkb-linux-arm64.tar.gz"
                 sha256 "${{ steps.checksums.outputs.linux_arm64 }}"
               end
               on_intel do
-                url "https://github.com/harmony-labs/gitkb-releases/releases/download/v#{version}/gitkb-linux-x64.tar.gz"
+                url "https://github.com/gitkb/gitkb-releases/releases/download/v#{version}/gitkb-linux-x64.tar.gz"
                 sha256 "${{ steps.checksums.outputs.linux_x64 }}"
               end
             end
@@ -210,7 +210,7 @@ jobs:
           BRANCH="update-gitkb-${VERSION}"
 
           gh auth setup-git
-          gh repo clone harmony-labs/homebrew-tap tap
+          gh repo clone gitkb/homebrew-tap tap
           mkdir -p tap/Formula
           cp gitkb.rb tap/Formula/
           cd tap
@@ -223,15 +223,15 @@ jobs:
             # Force push in case branch exists from a previous failed run
             git push -f -u origin "$BRANCH"
             # Create PR only if one doesn't already exist
-            if ! gh pr view "$BRANCH" --repo harmony-labs/homebrew-tap &>/dev/null; then
+            if ! gh pr view "$BRANCH" --repo gitkb/homebrew-tap &>/dev/null; then
               gh pr create \
                 --title "Update gitkb to v${VERSION}" \
                 --body "Automated formula update from gitkb-core release v${VERSION}." \
-                --repo harmony-labs/homebrew-tap
+                --repo gitkb/homebrew-tap
             fi
             gh pr merge "$BRANCH" \
               --auto --squash \
-              --repo harmony-labs/homebrew-tap || echo "Auto-merge setup failed (may require approvals)"
+              --repo gitkb/homebrew-tap || echo "Auto-merge setup failed (may require approvals)"
           else
             echo "Formula unchanged, skipping commit"
           fi

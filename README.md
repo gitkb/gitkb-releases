@@ -5,7 +5,7 @@
 GitKB is a git-like distributed knowledge graph protocol with sparse sync and checkout semantics, enabling agents and their humans to work on all the world's knowledge — a few documents at a time.
 
 ```bash
-brew install harmony-labs/tap/gitkb
+brew install gitkb/tap/gitkb
 ```
 
 ## What It Does
@@ -22,7 +22,7 @@ brew install harmony-labs/tap/gitkb
 ## Quick Start
 
 ```bash
-brew install harmony-labs/tap/gitkb
+brew install gitkb/tap/gitkb
 # or: curl -fsSL https://get.gitkb.com/install.sh | bash
 
 cd your-project
@@ -80,12 +80,12 @@ See [the Claude Code guide](https://gitkb.com/docs/getting-started/claude-code/)
 
 | Method | Command |
 |--------|---------|
-| Homebrew | `brew install harmony-labs/tap/gitkb` |
+| Homebrew | `brew install gitkb/tap/gitkb` |
 | Install script | `curl -fsSL https://get.gitkb.com/install.sh \| bash` |
 | Cargo binstall | `cargo binstall gitkb-cli` |
 | Specific version | `VERSION=x.y.z curl -fsSL https://get.gitkb.com/install.sh \| bash` |
 
-Checksums are published on the [releases page](https://github.com/harmony-labs/gitkb-releases/releases).
+Checksums are published on the [releases page](https://github.com/gitkb/gitkb-releases/releases).
 
 ## Documentation
 

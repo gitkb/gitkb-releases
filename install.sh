@@ -6,7 +6,7 @@ set -eu
 #   or:  VERSION=0.1.5 curl -fsSL ... | bash
 #   or:  INSTALL_DIR=/usr/local/bin curl -fsSL ... | bash
 
-REPO="harmony-labs/gitkb-releases"
+REPO="gitkb/gitkb-releases"
 INSTALL_DIR="${INSTALL_DIR:-$HOME/.local/bin}"
 VERSION="${VERSION:-latest}"
 SKIP_CHECKSUM="${SKIP_CHECKSUM:-0}"  # Set to 1 to bypass checksum verification
