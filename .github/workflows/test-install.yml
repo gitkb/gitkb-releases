@@ -81,8 +81,12 @@ jobs:
               test -f "$HOME/.local/bin/git-kb" || { echo "FAIL: binary not found"; exit 1; }
               "$HOME/.local/bin/git-kb" --version     # proves correct arch + no missing libs
 
-              # No unbound variable errors or other stderr noise
-              if [ -s /tmp/install_stderr.log ]; then
+              # No unbound variable errors or other stderr noise.
+              # Filter known-harmless tar warnings about unknown xattr headers
+              # (arm64 release tarball carries LIBARCHIVE.xattr.* headers from
+              # its macOS-side packaging; GNU tar warns but extracts cleanly).
+              if grep -v "^tar: Ignoring unknown extended header keyword" \
+                   /tmp/install_stderr.log | grep -q .; then
                 echo "FAIL: install.sh produced unexpected stderr output:"
                 cat /tmp/install_stderr.log
                 exit 1
@@ -128,8 +132,12 @@ jobs:
           test -f "$HOME/.local/bin/git-kb" || { echo "FAIL: binary not found"; exit 1; }
           "$HOME/.local/bin/git-kb" --version
 
-          # No unbound variable errors or other stderr noise
-          if [ -s /tmp/install_stderr.log ]; then
+          # No unbound variable errors or other stderr noise.
+          # Filter known-harmless tar warnings about unknown xattr headers
+          # (arm64 release tarball carries LIBARCHIVE.xattr.* headers from
+          # its macOS-side packaging; GNU tar warns but extracts cleanly).
+          if grep -v "^tar: Ignoring unknown extended header keyword" \
+               /tmp/install_stderr.log | grep -q .; then
             echo "FAIL: install.sh produced unexpected stderr output:"
             cat /tmp/install_stderr.log
             exit 1
