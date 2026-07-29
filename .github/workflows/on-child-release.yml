@@ -73,7 +73,7 @@ jobs:
               echo
               echo "Or install this exact version via shell:"
               echo '```bash'
-              echo "VERSION=${VERSION} curl -fsSL https://raw.githubusercontent.com/gitkb/gitkb-releases/main/install.sh | bash"
+              echo "curl -fsSL https://raw.githubusercontent.com/gitkb/gitkb-releases/main/install.sh | env VERSION=${VERSION} bash"
               echo '```'
             } > release-body.md
           else
@@ -93,7 +93,7 @@ jobs:
           fi
 
       - name: Create public release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2
         with:
           tag_name: ${{ steps.info.outputs.tag }}
           name: ${{ steps.info.outputs.tag }}
@@ -176,7 +176,7 @@ jobs:
     if: needs.mirror-release.outputs.channel == 'stable'
     steps:
       - name: Dispatch Homebrew tap update
-        uses: peter-evans/repository-dispatch@v4
+        uses: peter-evans/repository-dispatch@28959ce8df70de7be546dd1250a005dd32156697 # v4
         with:
           token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
           repository: gitkb/homebrew-tap
@@ -194,7 +194,7 @@ jobs:
     if: needs.mirror-release.outputs.channel == 'alpha'
     steps:
       - name: Dispatch Homebrew alpha tap update
-        uses: peter-evans/repository-dispatch@v4
+        uses: peter-evans/repository-dispatch@28959ce8df70de7be546dd1250a005dd32156697 # v4
         with:
           token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
           repository: gitkb/homebrew-tap
