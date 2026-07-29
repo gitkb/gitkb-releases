@@ -14,44 +14,91 @@ jobs:
     outputs:
       tag: ${{ steps.info.outputs.tag }}
       version: ${{ steps.info.outputs.version }}
+      prerelease: ${{ steps.info.outputs.prerelease }}
+      channel: ${{ steps.info.outputs.channel }}
     steps:
       - name: Extract release info
         id: info
         run: |
-          TAG="${{ github.event.client_payload.tag }}"
+          set -euo pipefail
+
+          TAG="$(jq -r '.client_payload.tag // ""' "$GITHUB_EVENT_PATH")"
+          if [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            CHANNEL=stable
+            PRERELEASE=false
+          elif [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+-alpha\.[0-9]+\.[0-9]+\.[0-9a-f]{7,40}$ ]]; then
+            CHANNEL=alpha
+            PRERELEASE=true
+          else
+            echo "::error::Unsupported release tag: $TAG"
+            exit 1
+          fi
+
           VERSION="${TAG#v}"
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "prerelease=$PRERELEASE" >> "$GITHUB_OUTPUT"
+          echo "channel=$CHANNEL" >> "$GITHUB_OUTPUT"
 
       - name: Download assets from private release
         env:
           GH_TOKEN: ${{ secrets.CORE_REPO_PAT }}
+          TAG: ${{ steps.info.outputs.tag }}
         run: |
+          set -euo pipefail
           mkdir -p release
-          gh release download "${{ steps.info.outputs.tag }}" \
+          gh release download "$TAG" \
             --repo gitkb/gitkb-core \
             --pattern "*.tar.gz" \
             --pattern "*.sha256" \
             --pattern "checksums.txt" \
             --dir release
 
+      - name: Write release body
+        env:
+          PRERELEASE: ${{ steps.info.outputs.prerelease }}
+          TAG: ${{ steps.info.outputs.tag }}
+          VERSION: ${{ steps.info.outputs.version }}
+        run: |
+          set -euo pipefail
+
+          if [ "$PRERELEASE" = "true" ]; then
+            {
+              echo "GitKB ${TAG} pre-release"
+              echo
+              echo "Install the alpha channel via Homebrew:"
+              echo '```bash'
+              echo "brew install gitkb/tap/gitkb-alpha"
+              echo '```'
+              echo
+              echo "Or install this exact version via shell:"
+              echo '```bash'
+              echo "curl -fsSL https://raw.githubusercontent.com/gitkb/gitkb-releases/main/install.sh | env VERSION=${VERSION} bash"
+              echo '```'
+            } > release-body.md
+          else
+            {
+              echo "GitKB ${TAG}"
+              echo
+              echo "Install via:"
+              echo '```bash'
+              echo "curl -fsSL https://raw.githubusercontent.com/gitkb/gitkb-releases/main/install.sh | bash"
+              echo '```'
+              echo
+              echo "Or via Homebrew:"
+              echo '```bash'
+              echo "brew install gitkb/tap/gitkb"
+              echo '```'
+            } > release-body.md
+          fi
+
       - name: Create public release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2
         with:
           tag_name: ${{ steps.info.outputs.tag }}
           name: ${{ steps.info.outputs.tag }}
-          body: |
-            GitKB ${{ steps.info.outputs.tag }}
-
-            Install via:
-            ```bash
-            curl -fsSL https://raw.githubusercontent.com/gitkb/gitkb-releases/main/install.sh | bash
-            ```
-
-            Or via Homebrew:
-            ```bash
-            brew install gitkb/tap/gitkb
-            ```
+          body_path: release-body.md
+          prerelease: ${{ steps.info.outputs.prerelease }}
           files: release/*
           fail_on_unmatched_files: true
         env:
@@ -61,6 +108,7 @@ jobs:
     name: Notify Discord
     needs: mirror-release
     runs-on: ubuntu-latest
+    if: needs.mirror-release.outputs.prerelease != 'true'
     continue-on-error: true
     steps:
       - name: Check webhook configured
@@ -76,9 +124,10 @@ jobs:
       - name: Post to Discord
         if: steps.check.outputs.skip != 'true'
         env:
+          TAG: ${{ needs.mirror-release.outputs.tag }}
           WEBHOOK_URL: ${{ secrets.DISCORD_RELEASES_WEBHOOK_URL }}
         run: |
-          TAG="${{ needs.mirror-release.outputs.tag }}"
+          set -euo pipefail
 
           # Build JSON payload with jq to handle escaping
           PAYLOAD=$(jq -n \
@@ -124,114 +173,34 @@ jobs:
     name: Update Homebrew Formula
     needs: mirror-release
     runs-on: ubuntu-latest
-    # Only update on non-prerelease tags
-    if: ${{ !contains(github.event.client_payload.tag, '-') }}
+    if: needs.mirror-release.outputs.channel == 'stable'
     steps:
-      - name: Extract version
-        id: version
-        run: |
-          TAG="${{ github.event.client_payload.tag }}"
-          echo "version=${TAG#v}" >> "$GITHUB_OUTPUT"
+      - name: Dispatch Homebrew tap update
+        uses: peter-evans/repository-dispatch@28959ce8df70de7be546dd1250a005dd32156697 # v4
+        with:
+          token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          repository: gitkb/homebrew-tap
+          event-type: gitkb-formula-update
+          client-payload: >-
+            {
+              "channel": "stable",
+              "tag": "${{ needs.mirror-release.outputs.tag }}"
+            }
 
-      - name: Download checksum files
-        env:
-          GH_TOKEN: ${{ secrets.CORE_REPO_PAT }}
-        run: |
-          mkdir -p checksums
-          gh release download "${{ github.event.client_payload.tag }}" \
-            --repo gitkb/gitkb-core \
-            --pattern "*.sha256" \
-            --dir checksums
-
-      - name: Calculate checksums
-        id: checksums
-        run: |
-          DARWIN_ARM64=$(awk '{print $1}' checksums/gitkb-darwin-arm64.tar.gz.sha256)
-          DARWIN_X64=$(awk '{print $1}' checksums/gitkb-darwin-x64.tar.gz.sha256)
-          LINUX_ARM64=$(awk '{print $1}' checksums/gitkb-linux-arm64.tar.gz.sha256)
-          LINUX_X64=$(awk '{print $1}' checksums/gitkb-linux-x64.tar.gz.sha256)
-
-          {
-            echo "darwin_arm64=$DARWIN_ARM64"
-            echo "darwin_x64=$DARWIN_X64"
-            echo "linux_arm64=$LINUX_ARM64"
-            echo "linux_x64=$LINUX_X64"
-          } >> "$GITHUB_OUTPUT"
-
-      - name: Generate Homebrew formula
-        run: |
-          cat > gitkb.rb << 'FORMULA'
-          # typed: false
-          # frozen_string_literal: true
-
-          class Gitkb < Formula
-            desc "Git-native knowledge base with AI-powered code intelligence"
-            homepage "https://github.com/gitkb/gitkb-releases"
-            version "${{ steps.version.outputs.version }}"
-            license "MIT"
-
-            on_macos do
-              on_arm do
-                url "https://github.com/gitkb/gitkb-releases/releases/download/v#{version}/gitkb-darwin-arm64.tar.gz"
-                sha256 "${{ steps.checksums.outputs.darwin_arm64 }}"
-              end
-              on_intel do
-                url "https://github.com/gitkb/gitkb-releases/releases/download/v#{version}/gitkb-darwin-x64.tar.gz"
-                sha256 "${{ steps.checksums.outputs.darwin_x64 }}"
-              end
-            end
-
-            on_linux do
-              on_arm do
-                url "https://github.com/gitkb/gitkb-releases/releases/download/v#{version}/gitkb-linux-arm64.tar.gz"
-                sha256 "${{ steps.checksums.outputs.linux_arm64 }}"
-              end
-              on_intel do
-                url "https://github.com/gitkb/gitkb-releases/releases/download/v#{version}/gitkb-linux-x64.tar.gz"
-                sha256 "${{ steps.checksums.outputs.linux_x64 }}"
-              end
-            end
-
-            def install
-              bin.install "git-kb"
-            end
-
-            test do
-              system "#{bin}/git-kb", "--version"
-            end
-          end
-          FORMULA
-
-      - name: Push to Homebrew tap
-        env:
-          GH_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
-        run: |
-          VERSION="${{ steps.version.outputs.version }}"
-          BRANCH="update-gitkb-${VERSION}"
-
-          gh auth setup-git
-          gh repo clone gitkb/homebrew-tap tap
-          mkdir -p tap/Formula
-          cp gitkb.rb tap/Formula/
-          cd tap
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add Formula/gitkb.rb
-          if ! git diff --cached --quiet; then
-            git checkout -b "$BRANCH"
-            git commit -m "Update gitkb to v${VERSION}"
-            # Force push in case branch exists from a previous failed run
-            git push -f -u origin "$BRANCH"
-            # Create PR only if one doesn't already exist
-            if ! gh pr view "$BRANCH" --repo gitkb/homebrew-tap &>/dev/null; then
-              gh pr create \
-                --title "Update gitkb to v${VERSION}" \
-                --body "Automated formula update from gitkb-core release v${VERSION}." \
-                --repo gitkb/homebrew-tap
-            fi
-            gh pr merge "$BRANCH" \
-              --squash \
-              --repo gitkb/homebrew-tap
-          else
-            echo "Formula unchanged, skipping commit"
-          fi
+  update-homebrew-alpha:
+    name: Update Homebrew Alpha Formula
+    needs: mirror-release
+    runs-on: ubuntu-latest
+    if: needs.mirror-release.outputs.channel == 'alpha'
+    steps:
+      - name: Dispatch Homebrew alpha tap update
+        uses: peter-evans/repository-dispatch@28959ce8df70de7be546dd1250a005dd32156697 # v4
+        with:
+          token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          repository: gitkb/homebrew-tap
+          event-type: gitkb-formula-update
+          client-payload: >-
+            {
+              "channel": "alpha",
+              "tag": "${{ needs.mirror-release.outputs.tag }}"
+            }
