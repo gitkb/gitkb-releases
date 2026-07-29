@@ -15,26 +15,39 @@ jobs:
       tag: ${{ steps.info.outputs.tag }}
       version: ${{ steps.info.outputs.version }}
       prerelease: ${{ steps.info.outputs.prerelease }}
+      channel: ${{ steps.info.outputs.channel }}
     steps:
       - name: Extract release info
         id: info
         run: |
-          TAG="${{ github.event.client_payload.tag }}"
+          set -euo pipefail
+
+          TAG="$(jq -r '.client_payload.tag // ""' "$GITHUB_EVENT_PATH")"
+          if [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            CHANNEL=stable
+            PRERELEASE=false
+          elif [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+-alpha\.[0-9]+\.[0-9]+\.[0-9a-f]{7,40}$ ]]; then
+            CHANNEL=alpha
+            PRERELEASE=true
+          else
+            echo "::error::Unsupported release tag: $TAG"
+            exit 1
+          fi
+
           VERSION="${TAG#v}"
-          PRERELEASE=false
-          case "$VERSION" in
-            *-*) PRERELEASE=true ;;
-          esac
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "prerelease=$PRERELEASE" >> "$GITHUB_OUTPUT"
+          echo "channel=$CHANNEL" >> "$GITHUB_OUTPUT"
 
       - name: Download assets from private release
         env:
           GH_TOKEN: ${{ secrets.CORE_REPO_PAT }}
+          TAG: ${{ steps.info.outputs.tag }}
         run: |
+          set -euo pipefail
           mkdir -p release
-          gh release download "${{ steps.info.outputs.tag }}" \
+          gh release download "$TAG" \
             --repo gitkb/gitkb-core \
             --pattern "*.tar.gz" \
             --pattern "*.sha256" \
@@ -42,11 +55,14 @@ jobs:
             --dir release
 
       - name: Write release body
+        env:
+          PRERELEASE: ${{ steps.info.outputs.prerelease }}
+          TAG: ${{ steps.info.outputs.tag }}
+          VERSION: ${{ steps.info.outputs.version }}
         run: |
-          TAG="${{ steps.info.outputs.tag }}"
-          VERSION="${{ steps.info.outputs.version }}"
+          set -euo pipefail
 
-          if [ "${{ steps.info.outputs.prerelease }}" = "true" ]; then
+          if [ "$PRERELEASE" = "true" ]; then
             {
               echo "GitKB ${TAG} pre-release"
               echo
@@ -108,9 +124,10 @@ jobs:
       - name: Post to Discord
         if: steps.check.outputs.skip != 'true'
         env:
+          TAG: ${{ needs.mirror-release.outputs.tag }}
           WEBHOOK_URL: ${{ secrets.DISCORD_RELEASES_WEBHOOK_URL }}
         run: |
-          TAG="${{ needs.mirror-release.outputs.tag }}"
+          set -euo pipefail
 
           # Build JSON payload with jq to handle escaping
           PAYLOAD=$(jq -n \
@@ -156,8 +173,7 @@ jobs:
     name: Update Homebrew Formula
     needs: mirror-release
     runs-on: ubuntu-latest
-    # Only update on non-prerelease tags
-    if: ${{ !contains(github.event.client_payload.tag, '-') }}
+    if: needs.mirror-release.outputs.channel == 'stable'
     steps:
       - name: Dispatch Homebrew tap update
         uses: peter-evans/repository-dispatch@v4
@@ -175,7 +191,7 @@ jobs:
     name: Update Homebrew Alpha Formula
     needs: mirror-release
     runs-on: ubuntu-latest
-    if: ${{ contains(github.event.client_payload.tag, '-alpha.') }}
+    if: needs.mirror-release.outputs.channel == 'alpha'
     steps:
       - name: Dispatch Homebrew alpha tap update
         uses: peter-evans/repository-dispatch@v4
