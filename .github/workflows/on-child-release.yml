@@ -230,8 +230,8 @@ jobs:
                 --repo gitkb/homebrew-tap
             fi
             gh pr merge "$BRANCH" \
-              --auto --squash \
-              --repo gitkb/homebrew-tap || echo "Auto-merge setup failed (may require approvals)"
+              --squash \
+              --repo gitkb/homebrew-tap
           else
             echo "Formula unchanged, skipping commit"
           fi
