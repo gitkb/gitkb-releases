@@ -10,6 +10,10 @@ setup() {
   source "$BATS_TEST_DIRNAME/../install.sh"
 }
 
+file_mode() {
+  stat -c '%a' "$1" 2>/dev/null || stat -f '%Lp' "$1"
+}
+
 @test "persists a valid UUID without printing it and with owner-only permissions" {
   export GITKB_SETUP_ID="550e8400-e29b-41d4-a716-446655440000"
 
@@ -18,8 +22,8 @@ setup() {
   [ "$status" -eq 0 ]
   [ -z "$output" ]
   [ "$(cat "$XDG_CONFIG_HOME/gitkb/setup-id")" = "$GITKB_SETUP_ID" ]
-  [ "$(stat -c '%a' "$XDG_CONFIG_HOME/gitkb/setup-id")" = "600" ]
-  [ "$(stat -c '%a' "$XDG_CONFIG_HOME/gitkb")" = "700" ]
+  [ "$(file_mode "$XDG_CONFIG_HOME/gitkb/setup-id")" = "600" ]
+  [ "$(file_mode "$XDG_CONFIG_HOME/gitkb")" = "700" ]
 }
 
 @test "preserves the first valid pending ID across an upgrade" {
@@ -31,7 +35,7 @@ setup() {
   persist_setup_id
 
   [ "$(cat "$XDG_CONFIG_HOME/gitkb/setup-id")" = "6ba7b810-9dad-41d1-80b4-00c04fd430c8" ]
-  [ "$(stat -c '%a' "$XDG_CONFIG_HOME/gitkb/setup-id")" = "600" ]
+  [ "$(file_mode "$XDG_CONFIG_HOME/gitkb/setup-id")" = "600" ]
 }
 
 @test "ignores malformed and non-v4 identifiers" {
@@ -67,7 +71,7 @@ setup() {
 
   [ "$status" -eq 0 ]
   [ "$(cat "$XDG_CONFIG_HOME/gitkb/setup-id")" = "sentinel" ]
-  [ "$(stat -c '%a' "$XDG_CONFIG_HOME/gitkb/setup-id")" = "644" ]
+  [ "$(file_mode "$XDG_CONFIG_HOME/gitkb/setup-id")" = "644" ]
   [[ "$output" != *"$GITKB_SETUP_ID"* ]]
 }
 
@@ -90,4 +94,31 @@ setup() {
   persist_setup_id
 
   [ "$(cat "$HOME/.config/gitkb/setup-id")" = "$GITKB_SETUP_ID" ]
+}
+
+@test "refuses a symlinked configuration home without modifying its destination" {
+  local redirected="$TEST_ROOT/redirected"
+  mkdir -p "$redirected"
+  rmdir "$XDG_CONFIG_HOME"
+  ln -s "$redirected" "$XDG_CONFIG_HOME"
+  export GITKB_SETUP_ID="550e8400-e29b-41d4-a716-446655440000"
+
+  run persist_setup_id
+
+  [ "$status" -eq 0 ]
+  [ ! -e "$redirected/gitkb/setup-id" ]
+  [[ "$output" != *"$GITKB_SETUP_ID"* ]]
+}
+
+@test "restores the caller umask after persistence" {
+  export GITKB_SETUP_ID="550e8400-e29b-41d4-a716-446655440000"
+  umask 0022
+  local before
+  local after
+  before="$(umask)"
+
+  persist_setup_id
+  after="$(umask)"
+
+  [ "$after" = "$before" ]
 }

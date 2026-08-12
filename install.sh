@@ -40,7 +40,7 @@ error() {
 # Persist a gateway-issued setup UUID for one authenticated CLI handoff.
 # Never print the identifier, put it in argv, or replace a valid pending ID on
 # upgrade: the first unassociated install remains the durable join boundary.
-persist_setup_id() {
+persist_setup_id() (
     local setup_id="${GITKB_SETUP_ID:-}"
     if ! printf '%s\n' "$setup_id" | grep -Eq '^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$'; then
         return 0
@@ -51,6 +51,11 @@ persist_setup_id() {
         /*) config_home="$XDG_CONFIG_HOME" ;;
         *) config_home="$HOME/.config" ;;
     esac
+
+    if [ -L "$config_home" ] || { [ -e "$config_home" ] && [ ! -d "$config_home" ]; }; then
+        warn "Could not save install attribution state: unsafe GitKB config directory"
+        return 0
+    fi
 
     local state_dir="$config_home/gitkb"
     local state_file="$state_dir/setup-id"
@@ -102,7 +107,7 @@ persist_setup_id() {
         return 0
     fi
     rm -f "$state_tmp"
-}
+)
 
 # Detect platform
 detect_platform() {

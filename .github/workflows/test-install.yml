@@ -21,12 +21,17 @@ on:
         required: false
         default: ""
 
+permissions:
+  contents: read
+
 jobs:
   test-setup-state:
     runs-on: ubuntu-latest
     name: setup identity state
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
       - name: Install Bats
         run: sudo apt-get update -qq && sudo apt-get install -y -qq bats
       - name: Validate shell and setup-state security behavior
@@ -62,7 +67,9 @@ jobs:
     runs-on: ${{ matrix.runner }}
     name: linux / ${{ matrix.name }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
 
       - name: Pull Docker image (cached by runner)
         run: docker pull ${{ matrix.distro }}
@@ -126,7 +133,9 @@ jobs:
     runs-on: ${{ matrix.runner }}
     name: macos / ${{ matrix.name }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
 
       - name: Private-repo auth (no-op once public)
         env:

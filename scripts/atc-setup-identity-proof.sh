@@ -30,8 +30,12 @@ fi
 
 if command -v sha256sum >/dev/null 2>&1; then
   evidence_sha=$(sha256sum "$proof_log" | awk '{print $1}')
-else
+elif command -v shasum >/dev/null 2>&1; then
   evidence_sha=$(shasum -a 256 "$proof_log" | awk '{print $1}')
+else
+  status=failed
+  evidence_sha=0000000000000000000000000000000000000000000000000000000000000000
+  printf 'evidence checksum: unavailable\n' >>"$proof_log"
 fi
 
 printf '{"acceptance_target":"gitkb-installer-setup-identity-v1","disposable":true,"evidence_sha256":"%s","schema_version":1,"status":"%s","summary":"installer setup identity shell and persistence proof %s"}\n' \
