@@ -46,6 +46,26 @@ file_mode() {
   export GITKB_SETUP_ID="550e8400-e29b-11d4-a716-446655440000"
   persist_setup_id
   [ ! -e "$XDG_CONFIG_HOME/gitkb/setup-id" ]
+
+  export GITKB_SETUP_ID=$'550e8400-e29b-41d4-a716-446655440000\nunexpected'
+  persist_setup_id
+  [ ! -e "$XDG_CONFIG_HOME/gitkb/setup-id" ]
+}
+
+@test "rejects a non-canonical existing setup ID" {
+  mkdir -p "$XDG_CONFIG_HOME/gitkb"
+  printf '%s\n%s\n' \
+    "6ba7b810-9dad-41d1-80b4-00c04fd430c8" \
+    "unexpected" > "$XDG_CONFIG_HOME/gitkb/setup-id"
+  chmod 600 "$XDG_CONFIG_HOME/gitkb/setup-id"
+  export GITKB_SETUP_ID="550e8400-e29b-41d4-a716-446655440000"
+
+  run persist_setup_id
+
+  [ "$status" -eq 0 ]
+  [ "$(cat "$XDG_CONFIG_HOME/gitkb/setup-id")" = $'6ba7b810-9dad-41d1-80b4-00c04fd430c8\nunexpected' ]
+  [[ "$output" == *"unsafe existing file"* ]]
+  [[ "$output" != *"$GITKB_SETUP_ID"* ]]
 }
 
 @test "refuses a symlink target without modifying its destination" {

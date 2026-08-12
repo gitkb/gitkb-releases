@@ -22,6 +22,20 @@ if ! HOME="$proof_dir/home" \
     persist_setup_id
     test "$(cat "$XDG_CONFIG_HOME/gitkb/setup-id")" = "$GITKB_SETUP_ID"
     case "$(stat -c %a "$XDG_CONFIG_HOME/gitkb/setup-id" 2>/dev/null || stat -f %Lp "$XDG_CONFIG_HOME/gitkb/setup-id")" in 600) ;; *) exit 1 ;; esac
+    malformed_config="$HOME/malformed-config"
+    GITKB_SETUP_ID=$'"'"'550e8400-e29b-41d4-a716-446655440000\nunexpected'"'"' \
+      XDG_CONFIG_HOME="$malformed_config" \
+      persist_setup_id
+    test ! -e "$malformed_config/gitkb/setup-id"
+    malformed_state="$HOME/malformed-state"
+    mkdir -p "$malformed_state/gitkb"
+    printf "%s\n%s\n" \
+      6ba7b810-9dad-41d1-80b4-00c04fd430c8 \
+      unexpected > "$malformed_state/gitkb/setup-id"
+    chmod 600 "$malformed_state/gitkb/setup-id"
+    warning=$(XDG_CONFIG_HOME="$malformed_state" persist_setup_id)
+    case "$warning" in *"unsafe existing file"*) ;; *) exit 1 ;; esac
+    test "$(cat "$malformed_state/gitkb/setup-id")" = $'"'"'6ba7b810-9dad-41d1-80b4-00c04fd430c8\nunexpected'"'"'
   ' >>"$proof_log" 2>&1; then
   status=failed
 else

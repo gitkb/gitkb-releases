@@ -42,7 +42,8 @@ error() {
 # upgrade: the first unassociated install remains the durable join boundary.
 persist_setup_id() (
     local setup_id="${GITKB_SETUP_ID:-}"
-    if ! printf '%s\n' "$setup_id" | grep -Eq '^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$'; then
+    local setup_id_pattern='^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$'
+    if [[ ! "$setup_id" =~ $setup_id_pattern ]]; then
         return 0
     fi
 
@@ -85,9 +86,15 @@ persist_setup_id() (
         fi
         local state_mode
         local state_links
+        local existing_setup_id=""
         state_mode=$(stat -c '%a' "$state_file" 2>/dev/null || stat -f '%Lp' "$state_file" 2>/dev/null || true)
         state_links=$(stat -c '%h' "$state_file" 2>/dev/null || stat -f '%l' "$state_file" 2>/dev/null || true)
-        if [ "$state_mode" = "600" ] && [ "$state_links" = "1" ] && grep -Eq '^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$' "$state_file"; then
+        IFS= read -r existing_setup_id < "$state_file" || true
+        if [ "$state_mode" = "600" ] &&
+            [ "$state_links" = "1" ] &&
+            [[ "$existing_setup_id" =~ $setup_id_pattern ]] &&
+            printf '%s\n' "$existing_setup_id" | cmp -s - "$state_file"
+        then
             return 0
         fi
         warn "Could not save install attribution state: unsafe existing file"
