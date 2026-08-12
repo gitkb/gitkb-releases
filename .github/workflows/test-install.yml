@@ -26,6 +26,9 @@ permissions:
 
 jobs:
   test-setup-state:
+    if: >-
+      github.event_name != 'workflow_run' ||
+      github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     name: setup identity state
     steps:
@@ -181,7 +184,8 @@ jobs:
           echo "linux:  ${{ needs.test-linux.result }}"
           echo "macos:  ${{ needs.test-macos.result }}"
           echo "setup:  ${{ needs.test-setup-state.result }}"
-          if [[ "${{ needs.test-linux.result }}" == "skipped" && \
+          if [[ "${{ needs.test-setup-state.result }}" == "skipped" && \
+                "${{ needs.test-linux.result }}" == "skipped" && \
                 "${{ needs.test-macos.result }}" == "skipped" ]]; then
             echo "Tests skipped (upstream workflow did not succeed)."
             exit 0
