@@ -8,7 +8,10 @@ on:
 
   # Test PRs that touch the installer
   pull_request:
-    paths: [install.sh]
+    paths:
+      - install.sh
+      - tests/**
+      - .github/workflows/test-install.yml
 
   # Manual trigger with optional version override
   workflow_dispatch:
@@ -19,6 +22,18 @@ on:
         default: ""
 
 jobs:
+  test-setup-state:
+    runs-on: ubuntu-latest
+    name: setup identity state
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Bats
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq bats
+      - name: Validate shell and setup-state security behavior
+        run: |
+          bash -n install.sh
+          bats tests/install-setup-id.bats
+
   # ---------------------------------------------------------------------------
   # Linux — Docker containers give a clean, minimal environment
   # ---------------------------------------------------------------------------
@@ -148,7 +163,7 @@ jobs:
   # ---------------------------------------------------------------------------
   results:
     if: always()
-    needs: [test-linux, test-macos]
+    needs: [test-setup-state, test-linux, test-macos]
     runs-on: ubuntu-latest
     name: results
     steps:
@@ -156,6 +171,7 @@ jobs:
         run: |
           echo "linux:  ${{ needs.test-linux.result }}"
           echo "macos:  ${{ needs.test-macos.result }}"
+          echo "setup:  ${{ needs.test-setup-state.result }}"
           if [[ "${{ needs.test-linux.result }}" == "skipped" && \
                 "${{ needs.test-macos.result }}" == "skipped" ]]; then
             echo "Tests skipped (upstream workflow did not succeed)."
@@ -164,7 +180,8 @@ jobs:
           # Treat skipped as acceptable when paired with success
           linux_ok=$([[ "${{ needs.test-linux.result }}" =~ ^(success|skipped)$ ]] && echo true || echo false)
           macos_ok=$([[ "${{ needs.test-macos.result }}" =~ ^(success|skipped)$ ]] && echo true || echo false)
-          if [[ "$linux_ok" == "true" && "$macos_ok" == "true" ]]; then
+          setup_ok=$([[ "${{ needs.test-setup-state.result }}" == "success" ]] && echo true || echo false)
+          if [[ "$linux_ok" == "true" && "$macos_ok" == "true" && "$setup_ok" == "true" ]]; then
             echo "All install tests passed."
           else
             echo "One or more install tests failed."

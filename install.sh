@@ -37,6 +37,73 @@ error() {
     exit 1
 }
 
+# Persist a gateway-issued setup UUID for one authenticated CLI handoff.
+# Never print the identifier, put it in argv, or replace a valid pending ID on
+# upgrade: the first unassociated install remains the durable join boundary.
+persist_setup_id() {
+    local setup_id="${GITKB_SETUP_ID:-}"
+    if ! printf '%s\n' "$setup_id" | grep -Eq '^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$'; then
+        return 0
+    fi
+
+    local config_home
+    case "${XDG_CONFIG_HOME:-}" in
+        /*) config_home="$XDG_CONFIG_HOME" ;;
+        *) config_home="$HOME/.config" ;;
+    esac
+
+    local state_dir="$config_home/gitkb"
+    local state_file="$state_dir/setup-id"
+    if [ -L "$state_dir" ] || { [ -e "$state_dir" ] && [ ! -d "$state_dir" ]; }; then
+        warn "Could not save install attribution state: unsafe GitKB config directory"
+        return 0
+    fi
+
+    umask 077
+    mkdir -p "$state_dir" || {
+        warn "Could not save install attribution state"
+        return 0
+    }
+    if [ ! -O "$state_dir" ] || ! chmod 700 "$state_dir" 2>/dev/null; then
+        warn "Could not save install attribution state: unsafe GitKB config directory"
+        return 0
+    fi
+
+    if [ -L "$state_file" ] || { [ -e "$state_file" ] && [ ! -f "$state_file" ]; }; then
+        warn "Could not save install attribution state: unsafe existing file"
+        return 0
+    fi
+    if [ -f "$state_file" ]; then
+        if [ ! -O "$state_file" ]; then
+            warn "Could not save install attribution state: unsafe existing file"
+            return 0
+        fi
+        local state_mode
+        local state_links
+        state_mode=$(stat -c '%a' "$state_file" 2>/dev/null || stat -f '%Lp' "$state_file" 2>/dev/null || true)
+        state_links=$(stat -c '%h' "$state_file" 2>/dev/null || stat -f '%l' "$state_file" 2>/dev/null || true)
+        if [ "$state_mode" = "600" ] && [ "$state_links" = "1" ] && grep -Eq '^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$' "$state_file"; then
+            return 0
+        fi
+        warn "Could not save install attribution state: unsafe existing file"
+        return 0
+    fi
+
+    local state_tmp
+    state_tmp=$(mktemp "$state_dir/setup-id.XXXXXX") || {
+        warn "Could not save install attribution state"
+        return 0
+    }
+    # Link into place without replacement so a concurrent writer cannot turn
+    # this best-effort handoff into an overwrite primitive.
+    if ! printf '%s\n' "$setup_id" > "$state_tmp" || ! chmod 600 "$state_tmp" || ! ln "$state_tmp" "$state_file"; then
+        rm -f "$state_tmp"
+        warn "Could not save install attribution state"
+        return 0
+    fi
+    rm -f "$state_tmp"
+}
+
 # Detect platform
 detect_platform() {
     local os
@@ -169,6 +236,8 @@ install_gitkb() {
         error "Installed binary failed to run: ${installed_version}"
     fi
 
+    persist_setup_id
+
     # Check if INSTALL_DIR is in PATH (POSIX-compatible)
     case ":$PATH:" in
         *":$INSTALL_DIR:"*) ;;
@@ -213,4 +282,6 @@ main() {
     install_gitkb
 }
 
-main "$@"
+if [ "${GITKB_INSTALLER_LIB_ONLY:-0}" != "1" ]; then
+    main "$@"
+fi
