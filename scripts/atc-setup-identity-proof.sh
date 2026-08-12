@@ -34,7 +34,7 @@ else
   evidence_sha=$(shasum -a 256 "$proof_log" | awk '{print $1}')
 fi
 
-printf '{"schema_version":1,"status":"%s","disposable":true,"acceptance_target":"gitkb-installer-setup-identity-v1","evidence_sha256":"%s","summary":"installer setup identity shell and persistence proof %s"}\n' \
-  "$status" "$evidence_sha" "$status"
+printf '{"acceptance_target":"gitkb-installer-setup-identity-v1","disposable":true,"evidence_sha256":"%s","schema_version":1,"status":"%s","summary":"installer setup identity shell and persistence proof %s"}\n' \
+  "$evidence_sha" "$status" "$status"
 
 test "$status" = passed
