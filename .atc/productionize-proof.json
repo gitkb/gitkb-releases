@@ -1,1 +1,0 @@
-{"schema_version":1,"name":"gitkb-installer-setup-identity","acceptance_target":"gitkb-installer-setup-identity-v1","argv":["scripts/atc-setup-identity-proof.sh"],"disposable":true,"timeout_seconds":300}
