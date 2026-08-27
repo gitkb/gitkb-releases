@@ -8,7 +8,10 @@ on:
 
   # Test PRs that touch the installer
   pull_request:
-    paths: [install.sh]
+    paths:
+      - install.sh
+      - tests/**
+      - .github/workflows/test-install.yml
 
   # Manual trigger with optional version override
   workflow_dispatch:
@@ -18,7 +21,27 @@ on:
         required: false
         default: ""
 
+permissions:
+  contents: read
+
 jobs:
+  test-setup-state:
+    if: >-
+      github.event_name != 'workflow_run' ||
+      github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    name: setup identity state
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - name: Install Bats
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq bats
+      - name: Validate shell and setup-state security behavior
+        run: |
+          bash -n install.sh
+          bats tests/install-setup-id.bats
+
   # ---------------------------------------------------------------------------
   # Linux — Docker containers give a clean, minimal environment
   # ---------------------------------------------------------------------------
@@ -47,7 +70,9 @@ jobs:
     runs-on: ${{ matrix.runner }}
     name: linux / ${{ matrix.name }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
 
       - name: Pull Docker image (cached by runner)
         run: docker pull ${{ matrix.distro }}
@@ -111,7 +136,9 @@ jobs:
     runs-on: ${{ matrix.runner }}
     name: macos / ${{ matrix.name }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
 
       - name: Private-repo auth (no-op once public)
         env:
@@ -148,7 +175,7 @@ jobs:
   # ---------------------------------------------------------------------------
   results:
     if: always()
-    needs: [test-linux, test-macos]
+    needs: [test-setup-state, test-linux, test-macos]
     runs-on: ubuntu-latest
     name: results
     steps:
@@ -156,7 +183,9 @@ jobs:
         run: |
           echo "linux:  ${{ needs.test-linux.result }}"
           echo "macos:  ${{ needs.test-macos.result }}"
-          if [[ "${{ needs.test-linux.result }}" == "skipped" && \
+          echo "setup:  ${{ needs.test-setup-state.result }}"
+          if [[ "${{ needs.test-setup-state.result }}" == "skipped" && \
+                "${{ needs.test-linux.result }}" == "skipped" && \
                 "${{ needs.test-macos.result }}" == "skipped" ]]; then
             echo "Tests skipped (upstream workflow did not succeed)."
             exit 0
@@ -164,7 +193,8 @@ jobs:
           # Treat skipped as acceptable when paired with success
           linux_ok=$([[ "${{ needs.test-linux.result }}" =~ ^(success|skipped)$ ]] && echo true || echo false)
           macos_ok=$([[ "${{ needs.test-macos.result }}" =~ ^(success|skipped)$ ]] && echo true || echo false)
-          if [[ "$linux_ok" == "true" && "$macos_ok" == "true" ]]; then
+          setup_ok=$([[ "${{ needs.test-setup-state.result }}" == "success" ]] && echo true || echo false)
+          if [[ "$linux_ok" == "true" && "$macos_ok" == "true" && "$setup_ok" == "true" ]]; then
             echo "All install tests passed."
           else
             echo "One or more install tests failed."
