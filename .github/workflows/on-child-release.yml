@@ -17,8 +17,14 @@ jobs:
     steps:
       - name: Extract release info
         id: info
+        env:
+          TAG: ${{ github.event.client_payload.tag }}
         run: |
-          TAG="${{ github.event.client_payload.tag }}"
+          # Later steps paste this tag into their scripts: refuse anything but a release tag.
+          if [[ ! "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
+            echo "::error::client_payload.tag must be vMAJOR.MINOR.PATCH[-pre], got '${TAG}'"
+            exit 1
+          fi
           VERSION="${TAG#v}"
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
@@ -57,18 +63,42 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-  # Dependents that pin git-kb's releases from here (listed with a release-pin
-  # entry for gitkb-releases in gitkb/workflows' dependents.yml) get dep-update
-  # with this version once the public release and its assets exist. Only this
-  # repo, and not for prereleases.
+  # Dependents that pin git-kb's releases from here get dep-update with this
+  # version once the public release and its assets exist. This repo is public
+  # and can't call the private gitkb/workflows, so it sends the dispatch
+  # itself: one per dependent that gitkb/workflows' dependents.yml lists with a
+  # release-pin entry for gitkb-releases. Keep the two in step; its daily check
+  # fails when a listed one is missing here. Only this repo, and only a
+  # published release.
   notify-release-pins:
+    name: Notify release pins
     needs: mirror-release
-    if: github.repository == 'gitkb/gitkb-releases' && !contains(needs.mirror-release.outputs.tag, '-')
-    uses: gitkb/workflows/.github/workflows/notify-dependents.yml@main
-    with:
-      version: ${{ needs.mirror-release.outputs.version }}
-    secrets:
-      dispatch-token: ${{ secrets.PARENT_REPO_PAT }}
+    if: github.repository == 'gitkb/gitkb-releases'
+    runs-on: ubuntu-latest
+    permissions: {}
+    steps:
+      - name: Send dep-update with the version
+        env:
+          GH_TOKEN: ${{ secrets.PARENT_REPO_PAT }}
+          TAG: ${{ needs.mirror-release.outputs.tag }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          if [[ ! "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::notice::${TAG} isn't vMAJOR.MINOR.PATCH; release pins take only those, so nothing is sent."
+            exit 0
+          fi
+          # The release's real state, not its tag's shape: a v1.2.3 can be a draft or marked prerelease.
+          state="$(gh api "repos/${REPO}/releases/tags/${TAG}" --jq 'if .draft then "draft" elif .prerelease then "prerelease" else "published" end')"
+          if [[ "$state" != published ]]; then
+            echo "::notice::${TAG} is a ${state} release; release pins move only to published ones, so nothing is sent."
+            exit 0
+          fi
+          sha="$(gh api "repos/${REPO}/commits/${TAG}" --jq .sha)"
+          payload="$(jq -n --arg repo "$REPO" --arg sha "$sha" --arg version "${TAG#v}" \
+            '{event_type: "dep-update", client_payload: {repo: $repo, sha: $sha, version: $version}}')"
+          gh api --method POST repos/gitkb/atc-sandbox/dispatches --input - <<<"$payload" >/dev/null
+          echo "Sent dep-update ${REPO} ${TAG} to gitkb/atc-sandbox"
 
   notify-discord:
     name: Notify Discord
@@ -142,16 +172,23 @@ jobs:
     steps:
       - name: Extract version
         id: version
+        env:
+          TAG: ${{ github.event.client_payload.tag }}
         run: |
-          TAG="${{ github.event.client_payload.tag }}"
+          # Later steps paste this tag into their scripts: refuse anything but a release tag.
+          if [[ ! "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
+            echo "::error::client_payload.tag must be vMAJOR.MINOR.PATCH[-pre], got '${TAG}'"
+            exit 1
+          fi
           echo "version=${TAG#v}" >> "$GITHUB_OUTPUT"
 
       - name: Download checksum files
         env:
           GH_TOKEN: ${{ secrets.CORE_REPO_PAT }}
+          TAG: ${{ github.event.client_payload.tag }}
         run: |
           mkdir -p checksums
-          gh release download "${{ github.event.client_payload.tag }}" \
+          gh release download "$TAG" \
             --repo gitkb/gitkb-core \
             --pattern "*.sha256" \
             --dir checksums
