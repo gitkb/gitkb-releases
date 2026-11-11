@@ -57,6 +57,19 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+  # Dependents that pin git-kb's releases from here (listed with a release-pin
+  # entry for gitkb-releases in gitkb/workflows' dependents.yml) get dep-update
+  # with this version once the public release and its assets exist. Only this
+  # repo, and not for prereleases.
+  notify-release-pins:
+    needs: mirror-release
+    if: github.repository == 'gitkb/gitkb-releases' && !contains(needs.mirror-release.outputs.tag, '-')
+    uses: gitkb/workflows/.github/workflows/notify-dependents.yml@main
+    with:
+      version: ${{ needs.mirror-release.outputs.version }}
+    secrets:
+      dispatch-token: ${{ secrets.PARENT_REPO_PAT }}
+
   notify-discord:
     name: Notify Discord
     needs: mirror-release
