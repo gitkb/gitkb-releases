@@ -8,6 +8,7 @@ on:
 
   # Test PRs that touch the installer
   pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
     paths: [install.sh]
 
   # Manual trigger with optional version override
@@ -24,8 +25,9 @@ jobs:
   # ---------------------------------------------------------------------------
   test-linux:
     if: >-
-      github.event_name != 'workflow_run' ||
-      github.event.workflow_run.conclusion == 'success'
+      (github.event_name != 'workflow_run' ||
+      github.event.workflow_run.conclusion == 'success') &&
+      github.event.pull_request.draft != true
     strategy:
       fail-fast: false
       matrix:
@@ -98,8 +100,9 @@ jobs:
   # ---------------------------------------------------------------------------
   test-macos:
     if: >-
-      github.event_name != 'workflow_run' ||
-      github.event.workflow_run.conclusion == 'success'
+      (github.event_name != 'workflow_run' ||
+      github.event.workflow_run.conclusion == 'success') &&
+      github.event.pull_request.draft != true
     strategy:
       fail-fast: false
       matrix:
@@ -147,7 +150,7 @@ jobs:
   # Summary — single required check for branch protection
   # ---------------------------------------------------------------------------
   results:
-    if: always()
+    if: always() && github.event.pull_request.draft != true
     needs: [test-linux, test-macos]
     runs-on: ubuntu-latest
     name: results
