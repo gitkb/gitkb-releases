@@ -75,11 +75,25 @@ jobs:
     needs: mirror-release
     if: github.repository == 'gitkb/gitkb-releases'
     runs-on: ubuntu-latest
-    permissions: {}
+    # GITHUB_TOKEN reads this repo's release and tag; the App's token sends the dispatch.
+    permissions:
+      contents: read
     steps:
+      # A dispatch needs contents write, on gitkb/atc-sandbox alone.
+      - name: Token to dispatch to atc-sandbox
+        id: dispatch-token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          app-id: ${{ secrets.DEPENDENCY_UPDATES_APP_ID }}
+          private-key: ${{ secrets.DEPENDENCY_UPDATES_APP_KEY }}
+          owner: gitkb
+          repositories: atc-sandbox
+          permission-contents: write
+
       - name: Send dep-update with the version
         env:
-          GH_TOKEN: ${{ secrets.PARENT_REPO_PAT }}
+          GH_TOKEN: ${{ github.token }}
+          DISPATCH_TOKEN: ${{ steps.dispatch-token.outputs.token }}
           TAG: ${{ needs.mirror-release.outputs.tag }}
           REPO: ${{ github.repository }}
         run: |
@@ -97,7 +111,7 @@ jobs:
           sha="$(gh api "repos/${REPO}/commits/${TAG}" --jq .sha)"
           payload="$(jq -n --arg repo "$REPO" --arg sha "$sha" --arg version "${TAG#v}" \
             '{event_type: "dep-update", client_payload: {repo: $repo, sha: $sha, version: $version}}')"
-          gh api --method POST repos/gitkb/atc-sandbox/dispatches --input - <<<"$payload" >/dev/null
+          GH_TOKEN="$DISPATCH_TOKEN" gh api --method POST repos/gitkb/atc-sandbox/dispatches --input - <<<"$payload" >/dev/null
           echo "Sent dep-update ${REPO} ${TAG} to gitkb/atc-sandbox"
 
   notify-discord:
