@@ -29,9 +29,20 @@ jobs:
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
 
+      # gitkb/gitkb-core is private: the dependency-updates App's token, contents read on it alone.
+      - name: Token to read gitkb/gitkb-core
+        id: core-token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          app-id: ${{ secrets.DEPENDENCY_UPDATES_APP_ID }}
+          private-key: ${{ secrets.DEPENDENCY_UPDATES_APP_KEY }}
+          owner: gitkb
+          repositories: gitkb-core
+          permission-contents: read
+
       - name: Download assets from private release
         env:
-          GH_TOKEN: ${{ secrets.CORE_REPO_PAT }}
+          GH_TOKEN: ${{ steps.core-token.outputs.token }}
         run: |
           mkdir -p release
           gh release download "${{ steps.info.outputs.tag }}" \
@@ -196,9 +207,20 @@ jobs:
           fi
           echo "version=${TAG#v}" >> "$GITHUB_OUTPUT"
 
+      # gitkb/gitkb-core is private: the dependency-updates App's token, contents read on it alone.
+      - name: Token to read gitkb/gitkb-core
+        id: core-token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          app-id: ${{ secrets.DEPENDENCY_UPDATES_APP_ID }}
+          private-key: ${{ secrets.DEPENDENCY_UPDATES_APP_KEY }}
+          owner: gitkb
+          repositories: gitkb-core
+          permission-contents: read
+
       - name: Download checksum files
         env:
-          GH_TOKEN: ${{ secrets.CORE_REPO_PAT }}
+          GH_TOKEN: ${{ steps.core-token.outputs.token }}
           TAG: ${{ github.event.client_payload.tag }}
         run: |
           mkdir -p checksums
@@ -266,9 +288,21 @@ jobs:
           end
           FORMULA
 
+      # Pushes the formula branch, opens and merges its PR on gitkb/homebrew-tap alone.
+      - name: Token to update gitkb/homebrew-tap
+        id: tap-token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          app-id: ${{ secrets.DEPENDENCY_UPDATES_APP_ID }}
+          private-key: ${{ secrets.DEPENDENCY_UPDATES_APP_KEY }}
+          owner: gitkb
+          repositories: homebrew-tap
+          permission-contents: write
+          permission-pull-requests: write
+
       - name: Push to Homebrew tap
         env:
-          GH_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          GH_TOKEN: ${{ steps.tap-token.outputs.token }}
         run: |
           VERSION="${{ steps.version.outputs.version }}"
           BRANCH="update-gitkb-${VERSION}"
