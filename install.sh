@@ -90,6 +90,7 @@ get_latest_version() {
 
 # Extensions installed beside git-kb: `git-kb <name>` runs `git-kb-<name>`.
 # Each release from 1.0.0 ships one archive per extension, gitkb-<name>-<platform>.tar.gz.
+# Paths under the temporary directory hold no spaces (mktemp -d).
 EXTENSIONS="code semantic"
 
 # download_verified <archive name> <base URL> <destination>
@@ -128,25 +129,33 @@ download_verified() {
     fi
 }
 
-# install_binary <name> <extract dir>
-install_binary() {
-    local name="$1"
-    local dir="$2"
-    if [ -f "$dir/$name" ]; then
-        cp "$dir/$name" "$INSTALL_DIR/"
-        chmod +x "$INSTALL_DIR/$name"
-        info "Installed $name"
-    else
+# check_binary <path>
+# Fails unless the extracted binary exists and runs, before anything is installed.
+check_binary() {
+    local path="$1"
+    local name
+    name=$(basename "$path")
+    if [ ! -f "$path" ]; then
         error "Binary $name not found in archive"
     fi
-
-    # Verify the binary runs
-    local installed_version
-    if installed_version=$("$INSTALL_DIR/$name" --version 2>&1); then
-        info "Verified: $installed_version"
+    chmod +x "$path"
+    local version_output
+    if version_output=$("$path" --version 2>&1); then
+        info "Verified: $(printf '%s\n' "$version_output" | head -n 1)"
     else
-        error "Installed binary $name failed to run: ${installed_version}"
+        error "Downloaded binary $name failed to run: ${version_output}"
     fi
+}
+
+# ships_extensions <version>
+# Releases from 1.0.0 ship git-kb-code and git-kb-semantic; earlier ones have
+# code intelligence built into git-kb and no extension archives.
+ships_extensions() {
+    local major="${1%%.*}"
+    case "$major" in
+        ''|*[!0-9]*) return 1 ;;
+    esac
+    [ "$major" -ge 1 ]
 }
 
 # Download and install
@@ -178,38 +187,37 @@ install_gitkb() {
     trap 'rm -rf "$tmp_dir"' EXIT INT TERM
 
     download_verified "gitkb-${platform}.tar.gz" "$base_url" "${tmp_dir}/gitkb.tar.gz"
-
     info "Extracting..."
     mkdir -p "${tmp_dir}/gitkb"
     tar -xzf "${tmp_dir}/gitkb.tar.gz" -C "${tmp_dir}/gitkb"
+    local binaries="${tmp_dir}/gitkb/git-kb"
 
-    # Create install directory if needed
-    mkdir -p "$INSTALL_DIR"
-
-    # Install binary
-    info "Installing to ${INSTALL_DIR}..."
-    install_binary git-kb "${tmp_dir}/gitkb"
-
-    # Extensions. A release lists every archive it has in checksums.txt;
-    # releases before 1.0.0 have none for the extensions, and git-kb still
-    # had code intelligence built in.
-    local listed=""
-    if curl -fsSL "${base_url}/checksums.txt" -o "${tmp_dir}/checksums.txt" 2>/dev/null; then
-        listed=$(awk '{print $2}' "${tmp_dir}/checksums.txt")
-    else
-        warn "Could not download checksums.txt; skipping the git-kb extensions"
-    fi
+    # Extensions: required for a release that ships them.
     local ext
-    for ext in $EXTENSIONS; do
-        local archive="gitkb-${ext}-${platform}.tar.gz"
-        if ! printf '%s\n' "$listed" | grep -qx "$archive"; then
-            info "Release v${version} has no git-kb-${ext}; skipping it"
-            continue
-        fi
-        download_verified "$archive" "$base_url" "${tmp_dir}/${archive}"
-        mkdir -p "${tmp_dir}/${ext}"
-        tar -xzf "${tmp_dir}/${archive}" -C "${tmp_dir}/${ext}"
-        install_binary "git-kb-${ext}" "${tmp_dir}/${ext}"
+    if ships_extensions "$version"; then
+        for ext in $EXTENSIONS; do
+            local archive="gitkb-${ext}-${platform}.tar.gz"
+            download_verified "$archive" "$base_url" "${tmp_dir}/${archive}"
+            mkdir -p "${tmp_dir}/${ext}"
+            tar -xzf "${tmp_dir}/${archive}" -C "${tmp_dir}/${ext}"
+            binaries="${binaries} ${tmp_dir}/${ext}/git-kb-${ext}"
+        done
+    else
+        info "Release v${version} has no git-kb extensions; git-kb has code intelligence built in"
+    fi
+
+    # Every binary runs before any installed one is replaced.
+    local binary
+    for binary in $binaries; do
+        check_binary "$binary"
+    done
+
+    mkdir -p "$INSTALL_DIR"
+    info "Installing to ${INSTALL_DIR}..."
+    for binary in $binaries; do
+        cp "$binary" "$INSTALL_DIR/"
+        chmod +x "$INSTALL_DIR/$(basename "$binary")"
+        info "Installed $(basename "$binary")"
     done
 
     # Check if INSTALL_DIR is in PATH (POSIX-compatible)

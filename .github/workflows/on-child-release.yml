@@ -242,11 +242,19 @@ jobs:
               echo "::error::the release has no $1" >&2
               exit 1
             fi
-            awk '{print $1}' "$file"
+            local digest
+            digest=$(awk 'NR == 1 {print $1}' "$file")
+            if [[ ! "$digest" =~ ^[0-9a-f]{64}$ ]]; then
+              echo "::error::$file holds no SHA-256 digest" >&2
+              exit 1
+            fi
+            echo "$digest"
           }
           platform_block() {
             local platform="$1"
-            local base='https://github.com/gitkb/gitkb-releases/releases/download/v#{version}'
+            # The shell's version, not Ruby's `#{version}`: inside a resource
+            # block that names the resource's version, which is unset.
+            local base="https://github.com/gitkb/gitkb-releases/releases/download/v${VERSION}"
             local sum
             sum=$(sha "gitkb-${platform}.tar.gz")
             echo "      url \"${base}/gitkb-${platform}.tar.gz\""
