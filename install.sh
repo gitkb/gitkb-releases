@@ -90,7 +90,6 @@ get_latest_version() {
 
 # Extensions installed beside git-kb: `git-kb <name>` runs `git-kb-<name>`.
 # Each release from 1.0.0 ships one archive per extension, gitkb-<name>-<platform>.tar.gz.
-# Paths under the temporary directory hold no spaces (mktemp -d).
 EXTENSIONS="code semantic"
 
 # download_verified <archive name> <base URL> <destination>
@@ -190,7 +189,7 @@ install_gitkb() {
     info "Extracting..."
     mkdir -p "${tmp_dir}/gitkb"
     tar -xzf "${tmp_dir}/gitkb.tar.gz" -C "${tmp_dir}/gitkb"
-    local binaries="${tmp_dir}/gitkb/git-kb"
+    local binaries=("${tmp_dir}/gitkb/git-kb")
 
     # Extensions: required for a release that ships them.
     local ext
@@ -200,23 +199,31 @@ install_gitkb() {
             download_verified "$archive" "$base_url" "${tmp_dir}/${archive}"
             mkdir -p "${tmp_dir}/${ext}"
             tar -xzf "${tmp_dir}/${archive}" -C "${tmp_dir}/${ext}"
-            binaries="${binaries} ${tmp_dir}/${ext}/git-kb-${ext}"
+            binaries+=("${tmp_dir}/${ext}/git-kb-${ext}")
         done
     else
         info "Release v${version} has no git-kb extensions; git-kb has code intelligence built in"
     fi
 
-    # Every binary runs before any installed one is replaced.
+    # Every binary is staged beside the installed ones, on the same file
+    # system, and runs there before any installed one is replaced.
+    mkdir -p "$INSTALL_DIR"
+    stage_dir=$(mktemp -d "${INSTALL_DIR}/.gitkb-install.XXXXXX")
+    trap 'rm -rf "$tmp_dir" "$stage_dir"' EXIT INT TERM
     local binary
-    for binary in $binaries; do
-        check_binary "$binary"
+    for binary in "${binaries[@]}"; do
+        if [ ! -f "$binary" ]; then
+            error "Binary $(basename "$binary") not found in archive"
+        fi
+        cp "$binary" "$stage_dir/"
+    done
+    for binary in "${binaries[@]}"; do
+        check_binary "${stage_dir}/$(basename "$binary")"
     done
 
-    mkdir -p "$INSTALL_DIR"
     info "Installing to ${INSTALL_DIR}..."
-    for binary in $binaries; do
-        cp "$binary" "$INSTALL_DIR/"
-        chmod +x "$INSTALL_DIR/$(basename "$binary")"
+    for binary in "${binaries[@]}"; do
+        mv -f "${stage_dir}/$(basename "$binary")" "$INSTALL_DIR/"
         info "Installed $(basename "$binary")"
     done
 
