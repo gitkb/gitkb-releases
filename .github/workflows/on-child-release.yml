@@ -229,66 +229,81 @@ jobs:
             --pattern "*.sha256" \
             --dir checksums
 
-      - name: Calculate checksums
-        id: checksums
-        run: |
-          DARWIN_ARM64=$(awk '{print $1}' checksums/gitkb-darwin-arm64.tar.gz.sha256)
-          DARWIN_X64=$(awk '{print $1}' checksums/gitkb-darwin-x64.tar.gz.sha256)
-          LINUX_ARM64=$(awk '{print $1}' checksums/gitkb-linux-arm64.tar.gz.sha256)
-          LINUX_X64=$(awk '{print $1}' checksums/gitkb-linux-x64.tar.gz.sha256)
-
-          {
-            echo "darwin_arm64=$DARWIN_ARM64"
-            echo "darwin_x64=$DARWIN_X64"
-            echo "linux_arm64=$LINUX_ARM64"
-            echo "linux_x64=$LINUX_X64"
-          } >> "$GITHUB_OUTPUT"
-
+      # git-kb and each extension (`git-kb <name>` runs `git-kb-<name>`), one
+      # archive per platform; the extensions are resources of the one formula.
       - name: Generate Homebrew formula
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
         run: |
-          cat > gitkb.rb << 'FORMULA'
-          # typed: false
-          # frozen_string_literal: true
+          set -euo pipefail
+          sha() {
+            local file="checksums/$1.sha256"
+            if [ ! -f "$file" ]; then
+              echo "::error::the release has no $1" >&2
+              exit 1
+            fi
+            awk '{print $1}' "$file"
+          }
+          platform_block() {
+            local platform="$1"
+            local base='https://github.com/gitkb/gitkb-releases/releases/download/v#{version}'
+            local sum
+            sum=$(sha "gitkb-${platform}.tar.gz")
+            echo "      url \"${base}/gitkb-${platform}.tar.gz\""
+            echo "      sha256 \"${sum}\""
+            for ext in code semantic; do
+              sum=$(sha "gitkb-${ext}-${platform}.tar.gz")
+              echo ""
+              echo "      resource \"git-kb-${ext}\" do"
+              echo "        url \"${base}/gitkb-${ext}-${platform}.tar.gz\""
+              echo "        sha256 \"${sum}\""
+              echo "      end"
+            done
+          }
+          {
+            echo '# typed: false'
+            echo '# frozen_string_literal: true'
+            echo ''
+            echo 'class Gitkb < Formula'
+            echo '  desc "Git-native knowledge base with AI-powered code intelligence"'
+            echo '  homepage "https://github.com/gitkb/gitkb-releases"'
+            echo "  version \"${VERSION}\""
+            echo '  license "MIT"'
+            echo ''
+            echo '  on_macos do'
+            echo '    on_arm do'
+            platform_block darwin-arm64
+            echo '    end'
+            echo '    on_intel do'
+            platform_block darwin-x64
+            echo '    end'
+            echo '  end'
+            echo ''
+            echo '  on_linux do'
+            echo '    on_arm do'
+            platform_block linux-arm64
+            echo '    end'
+            echo '    on_intel do'
+            platform_block linux-x64
+            echo '    end'
+            echo '  end'
+            echo ''
+            echo '  def install'
+            echo '    bin.install "git-kb"'
+            echo '    %w[git-kb-code git-kb-semantic].each do |name|'
+            echo '      resource(name).stage { bin.install name }'
+            echo '    end'
+            echo '  end'
+            echo ''
+            echo '  test do'
+            echo '    system "#{bin}/git-kb", "--version"'
+            echo '    system "#{bin}/git-kb-code", "--version"'
+            echo '    system "#{bin}/git-kb-semantic", "--version"'
+            echo '  end'
+            echo 'end'
+          } > gitkb.rb
+          cat gitkb.rb
 
-          class Gitkb < Formula
-            desc "Git-native knowledge base with AI-powered code intelligence"
-            homepage "https://github.com/gitkb/gitkb-releases"
-            version "${{ steps.version.outputs.version }}"
-            license "MIT"
-
-            on_macos do
-              on_arm do
-                url "https://github.com/gitkb/gitkb-releases/releases/download/v#{version}/gitkb-darwin-arm64.tar.gz"
-                sha256 "${{ steps.checksums.outputs.darwin_arm64 }}"
-              end
-              on_intel do
-                url "https://github.com/gitkb/gitkb-releases/releases/download/v#{version}/gitkb-darwin-x64.tar.gz"
-                sha256 "${{ steps.checksums.outputs.darwin_x64 }}"
-              end
-            end
-
-            on_linux do
-              on_arm do
-                url "https://github.com/gitkb/gitkb-releases/releases/download/v#{version}/gitkb-linux-arm64.tar.gz"
-                sha256 "${{ steps.checksums.outputs.linux_arm64 }}"
-              end
-              on_intel do
-                url "https://github.com/gitkb/gitkb-releases/releases/download/v#{version}/gitkb-linux-x64.tar.gz"
-                sha256 "${{ steps.checksums.outputs.linux_x64 }}"
-              end
-            end
-
-            def install
-              bin.install "git-kb"
-            end
-
-            test do
-              system "#{bin}/git-kb", "--version"
-            end
-          end
-          FORMULA
-
-      # Pushes the formula branch, opens and merges its PR on gitkb/homebrew-tap alone.
       - name: Token to update gitkb/homebrew-tap
         id: tap-token
         uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0

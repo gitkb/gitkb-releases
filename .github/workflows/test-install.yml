@@ -80,6 +80,12 @@ jobs:
               # --- Assertions ---------------------------------------------------
               test -f "$HOME/.local/bin/git-kb" || { echo "FAIL: binary not found"; exit 1; }
               "$HOME/.local/bin/git-kb" --version     # proves correct arch + no missing libs
+              # Releases from 1.0.0 ship the extensions; git-kb reaches them on PATH.
+              for ext in code semantic; do
+                if [ -f "$HOME/.local/bin/git-kb-$ext" ]; then
+                  PATH="$HOME/.local/bin:$PATH" git-kb "$ext" --version
+                fi
+              done
 
               # No unbound variable errors or other stderr noise.
               # Filter known-harmless tar warnings about unknown xattr headers
@@ -131,6 +137,12 @@ jobs:
         run: |
           test -f "$HOME/.local/bin/git-kb" || { echo "FAIL: binary not found"; exit 1; }
           "$HOME/.local/bin/git-kb" --version
+          # Releases from 1.0.0 ship the extensions; git-kb reaches them on PATH.
+          for ext in code semantic; do
+            if [ -f "$HOME/.local/bin/git-kb-$ext" ]; then
+              PATH="$HOME/.local/bin:$PATH" git-kb "$ext" --version
+            fi
+          done
 
           # No unbound variable errors or other stderr noise.
           # Filter known-harmless tar warnings about unknown xattr headers

@@ -88,6 +88,67 @@ get_latest_version() {
     fi
 }
 
+# Extensions installed beside git-kb: `git-kb <name>` runs `git-kb-<name>`.
+# Each release from 1.0.0 ships one archive per extension, gitkb-<name>-<platform>.tar.gz.
+EXTENSIONS="code semantic"
+
+# download_verified <archive name> <base URL> <destination>
+# Downloads one release archive and checks it against its .sha256 file.
+download_verified() {
+    local archive="$1"
+    local base_url="$2"
+    local dest="$3"
+
+    info "Downloading ${base_url}/${archive}..."
+    if ! curl -fsSL "${base_url}/${archive}" -o "$dest"; then
+        error "Failed to download ${archive} (check that the version exists)"
+    fi
+
+    if [ "$SKIP_CHECKSUM" = "1" ]; then
+        warn "Skipping checksum verification (SKIP_CHECKSUM=1)"
+    elif curl -fsSL "${base_url}/${archive}.sha256" -o "${dest}.sha256" 2>/dev/null; then
+        info "Verifying checksum..."
+        local expected
+        expected=$(awk '{print $1}' "${dest}.sha256")
+        local actual
+        if command -v sha256sum >/dev/null 2>&1; then
+            actual=$(sha256sum "$dest" | awk '{print $1}')
+        elif command -v shasum >/dev/null 2>&1; then
+            actual=$(shasum -a 256 "$dest" | awk '{print $1}')
+        else
+            error "Cannot verify checksum: neither sha256sum nor shasum found. Install one and retry."
+        fi
+
+        if [ "$expected" != "$actual" ]; then
+            error "Checksum verification failed for ${archive}!\n  Expected: ${expected}\n  Actual:   ${actual}"
+        fi
+        info "Checksum verified."
+    else
+        error "Could not download checksum file. Set SKIP_CHECKSUM=1 to bypass verification."
+    fi
+}
+
+# install_binary <name> <extract dir>
+install_binary() {
+    local name="$1"
+    local dir="$2"
+    if [ -f "$dir/$name" ]; then
+        cp "$dir/$name" "$INSTALL_DIR/"
+        chmod +x "$INSTALL_DIR/$name"
+        info "Installed $name"
+    else
+        error "Binary $name not found in archive"
+    fi
+
+    # Verify the binary runs
+    local installed_version
+    if installed_version=$("$INSTALL_DIR/$name" --version 2>&1); then
+        info "Verified: $installed_version"
+    else
+        error "Installed binary $name failed to run: ${installed_version}"
+    fi
+}
+
 # Download and install
 install_gitkb() {
     local platform
@@ -112,62 +173,44 @@ install_gitkb() {
 
     info "Installing git-kb v${version} for ${platform}..."
 
-    local download_url="https://github.com/${REPO}/releases/download/v${version}/gitkb-${platform}.tar.gz"
-    local checksum_url="https://github.com/${REPO}/releases/download/v${version}/gitkb-${platform}.tar.gz.sha256"
+    local base_url="https://github.com/${REPO}/releases/download/v${version}"
     tmp_dir=$(mktemp -d)
     trap 'rm -rf "$tmp_dir"' EXIT INT TERM
 
-    info "Downloading from ${download_url}..."
-    if ! curl -fsSL "$download_url" -o "${tmp_dir}/gitkb.tar.gz"; then
-        error "Failed to download git-kb (check that version '${version}' exists)"
-    fi
-
-    if [ "$SKIP_CHECKSUM" = "1" ]; then
-        warn "Skipping checksum verification (SKIP_CHECKSUM=1)"
-    elif curl -fsSL "$checksum_url" -o "${tmp_dir}/gitkb.tar.gz.sha256" 2>/dev/null; then
-        info "Verifying checksum..."
-        local expected
-        expected=$(awk '{print $1}' "${tmp_dir}/gitkb.tar.gz.sha256")
-        local actual
-        if command -v sha256sum >/dev/null 2>&1; then
-            actual=$(sha256sum "${tmp_dir}/gitkb.tar.gz" | awk '{print $1}')
-        elif command -v shasum >/dev/null 2>&1; then
-            actual=$(shasum -a 256 "${tmp_dir}/gitkb.tar.gz" | awk '{print $1}')
-        else
-            error "Cannot verify checksum: neither sha256sum nor shasum found. Install one and retry."
-        fi
-
-        if [ "$expected" != "$actual" ]; then
-            error "Checksum verification failed!\n  Expected: ${expected}\n  Actual:   ${actual}"
-        fi
-        info "Checksum verified."
-    else
-        error "Could not download checksum file. Set SKIP_CHECKSUM=1 to bypass verification."
-    fi
+    download_verified "gitkb-${platform}.tar.gz" "$base_url" "${tmp_dir}/gitkb.tar.gz"
 
     info "Extracting..."
-    tar -xzf "${tmp_dir}/gitkb.tar.gz" -C "$tmp_dir"
+    mkdir -p "${tmp_dir}/gitkb"
+    tar -xzf "${tmp_dir}/gitkb.tar.gz" -C "${tmp_dir}/gitkb"
 
     # Create install directory if needed
     mkdir -p "$INSTALL_DIR"
 
     # Install binary
     info "Installing to ${INSTALL_DIR}..."
-    if [ -f "$tmp_dir/git-kb" ]; then
-        cp "$tmp_dir/git-kb" "$INSTALL_DIR/"
-        chmod +x "$INSTALL_DIR/git-kb"
-        info "Installed git-kb"
-    else
-        error "Binary git-kb not found in archive"
-    fi
+    install_binary git-kb "${tmp_dir}/gitkb"
 
-    # Verify the binary runs
-    local installed_version
-    if installed_version=$("$INSTALL_DIR/git-kb" --version 2>&1); then
-        info "Verified: $installed_version"
+    # Extensions. A release lists every archive it has in checksums.txt;
+    # releases before 1.0.0 have none for the extensions, and git-kb still
+    # had code intelligence built in.
+    local listed=""
+    if curl -fsSL "${base_url}/checksums.txt" -o "${tmp_dir}/checksums.txt" 2>/dev/null; then
+        listed=$(awk '{print $2}' "${tmp_dir}/checksums.txt")
     else
-        error "Installed binary failed to run: ${installed_version}"
+        warn "Could not download checksums.txt; skipping the git-kb extensions"
     fi
+    local ext
+    for ext in $EXTENSIONS; do
+        local archive="gitkb-${ext}-${platform}.tar.gz"
+        if ! printf '%s\n' "$listed" | grep -qx "$archive"; then
+            info "Release v${version} has no git-kb-${ext}; skipping it"
+            continue
+        fi
+        download_verified "$archive" "$base_url" "${tmp_dir}/${archive}"
+        mkdir -p "${tmp_dir}/${ext}"
+        tar -xzf "${tmp_dir}/${archive}" -C "${tmp_dir}/${ext}"
+        install_binary "git-kb-${ext}" "${tmp_dir}/${ext}"
+    done
 
     # Check if INSTALL_DIR is in PATH (POSIX-compatible)
     case ":$PATH:" in
