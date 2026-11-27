@@ -22,6 +22,10 @@ on:
         required: false
         default: ""
 
+# The jobs run downloaded binaries with this token present: read only.
+permissions:
+  contents: read
+
 jobs:
   # ---------------------------------------------------------------------------
   # Linux — Docker containers give a clean, minimal environment

@@ -79,10 +79,12 @@ jobs:
   test-install:
     name: Test install
     needs: mirror-release
+    # Read-only: the jobs run the downloaded binaries with the token present.
+    permissions:
+      contents: read
     uses: ./.github/workflows/test-install.yml
     with:
       version: ${{ needs.mirror-release.outputs.version }}
-    secrets: inherit
 
   # Dependents that pin git-kb's releases from here get dep-update with this
   # version once the public release and its assets exist. This repo is public
