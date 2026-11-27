@@ -74,6 +74,18 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+  # The installer on Linux and macOS, against the release just uploaded.
+  # It depends on the upload alone, so a later Homebrew failure never skips it.
+  test-install:
+    name: Test install
+    needs: mirror-release
+    # Read-only: the jobs run the downloaded binaries with the token present.
+    permissions:
+      contents: read
+    uses: ./.github/workflows/test-install.yml
+    with:
+      version: ${{ needs.mirror-release.outputs.version }}
+
   # Dependents that pin git-kb's releases from here get dep-update with this
   # version once the public release and its assets exist. This repo is public
   # and can't call the private gitkb/workflows, so it sends the dispatch
@@ -152,7 +164,7 @@ jobs:
           PAYLOAD=$(jq -n \
             --arg title "GitKB $TAG Released" \
             --arg desc "A new version of GitKB is available." \
-            --arg install_sh 'curl -fsSL https://raw.githubusercontent.com/gitkb/gitkb-releases/main/install.sh | sh' \
+            --arg install_sh 'curl -fsSL https://raw.githubusercontent.com/gitkb/gitkb-releases/main/install.sh | bash' \
             --arg install_brew 'brew install gitkb/tap/gitkb' \
             --arg url "https://github.com/gitkb/gitkb-releases/releases/tag/$TAG" \
             '{
@@ -229,66 +241,98 @@ jobs:
             --pattern "*.sha256" \
             --dir checksums
 
-      - name: Calculate checksums
-        id: checksums
-        run: |
-          DARWIN_ARM64=$(awk '{print $1}' checksums/gitkb-darwin-arm64.tar.gz.sha256)
-          DARWIN_X64=$(awk '{print $1}' checksums/gitkb-darwin-x64.tar.gz.sha256)
-          LINUX_ARM64=$(awk '{print $1}' checksums/gitkb-linux-arm64.tar.gz.sha256)
-          LINUX_X64=$(awk '{print $1}' checksums/gitkb-linux-x64.tar.gz.sha256)
-
-          {
-            echo "darwin_arm64=$DARWIN_ARM64"
-            echo "darwin_x64=$DARWIN_X64"
-            echo "linux_arm64=$LINUX_ARM64"
-            echo "linux_x64=$LINUX_X64"
-          } >> "$GITHUB_OUTPUT"
-
+      # git-kb and each extension (`git-kb <name>` runs `git-kb-<name>`), one
+      # archive per platform; the extensions are resources of the one formula.
       - name: Generate Homebrew formula
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
         run: |
-          cat > gitkb.rb << 'FORMULA'
-          # typed: false
-          # frozen_string_literal: true
+          set -euo pipefail
+          sha() {
+            local file="checksums/$1.sha256"
+            if [ ! -f "$file" ]; then
+              echo "::error::the release has no $1" >&2
+              exit 1
+            fi
+            local digest
+            digest=$(awk 'NR == 1 {print $1}' "$file")
+            if [[ ! "$digest" =~ ^[0-9a-f]{64}$ ]]; then
+              echo "::error::$file holds no SHA-256 digest" >&2
+              exit 1
+            fi
+            echo "$digest"
+          }
+          # Releases from 1.0.0 ship the extensions; earlier ones have code
+          # intelligence built into git-kb and a core-only formula.
+          extensions=""
+          if [ "${VERSION%%.*}" -ge 1 ]; then
+            extensions="code semantic"
+          fi
+          platform_block() {
+            local platform="$1"
+            # The shell's version, not Ruby's `#{version}`: inside a resource
+            # block that names the resource's version, which is unset.
+            local base="https://github.com/gitkb/gitkb-releases/releases/download/v${VERSION}"
+            local sum
+            sum=$(sha "gitkb-${platform}.tar.gz")
+            echo "      url \"${base}/gitkb-${platform}.tar.gz\""
+            echo "      sha256 \"${sum}\""
+            for ext in $extensions; do
+              sum=$(sha "gitkb-${ext}-${platform}.tar.gz")
+              echo ""
+              echo "      resource \"git-kb-${ext}\" do"
+              echo "        url \"${base}/gitkb-${ext}-${platform}.tar.gz\""
+              echo "        sha256 \"${sum}\""
+              echo "      end"
+            done
+          }
+          {
+            echo '# typed: false'
+            echo '# frozen_string_literal: true'
+            echo ''
+            echo 'class Gitkb < Formula'
+            echo '  desc "Git-native knowledge base with AI-powered code intelligence"'
+            echo '  homepage "https://github.com/gitkb/gitkb-releases"'
+            echo "  version \"${VERSION}\""
+            echo '  license "MIT"'
+            echo ''
+            echo '  on_macos do'
+            echo '    on_arm do'
+            platform_block darwin-arm64
+            echo '    end'
+            echo '    on_intel do'
+            platform_block darwin-x64
+            echo '    end'
+            echo '  end'
+            echo ''
+            echo '  on_linux do'
+            echo '    on_arm do'
+            platform_block linux-arm64
+            echo '    end'
+            echo '    on_intel do'
+            platform_block linux-x64
+            echo '    end'
+            echo '  end'
+            echo ''
+            echo '  def install'
+            echo '    bin.install "git-kb"'
+            if [ -n "$extensions" ]; then
+              echo '    %w[git-kb-code git-kb-semantic].each do |name|'
+              echo '      resource(name).stage { bin.install name }'
+              echo '    end'
+            fi
+            echo '  end'
+            echo ''
+            echo '  test do'
+            echo '    system "#{bin}/git-kb", "--version"'
+            for ext in $extensions; do
+              echo "    system \"#{bin}/git-kb-${ext}\", \"--version\""
+            done
+            echo '  end'
+            echo 'end'
+          } > gitkb.rb
+          cat gitkb.rb
 
-          class Gitkb < Formula
-            desc "Git-native knowledge base with AI-powered code intelligence"
-            homepage "https://github.com/gitkb/gitkb-releases"
-            version "${{ steps.version.outputs.version }}"
-            license "MIT"
-
-            on_macos do
-              on_arm do
-                url "https://github.com/gitkb/gitkb-releases/releases/download/v#{version}/gitkb-darwin-arm64.tar.gz"
-                sha256 "${{ steps.checksums.outputs.darwin_arm64 }}"
-              end
-              on_intel do
-                url "https://github.com/gitkb/gitkb-releases/releases/download/v#{version}/gitkb-darwin-x64.tar.gz"
-                sha256 "${{ steps.checksums.outputs.darwin_x64 }}"
-              end
-            end
-
-            on_linux do
-              on_arm do
-                url "https://github.com/gitkb/gitkb-releases/releases/download/v#{version}/gitkb-linux-arm64.tar.gz"
-                sha256 "${{ steps.checksums.outputs.linux_arm64 }}"
-              end
-              on_intel do
-                url "https://github.com/gitkb/gitkb-releases/releases/download/v#{version}/gitkb-linux-x64.tar.gz"
-                sha256 "${{ steps.checksums.outputs.linux_x64 }}"
-              end
-            end
-
-            def install
-              bin.install "git-kb"
-            end
-
-            test do
-              system "#{bin}/git-kb", "--version"
-            end
-          end
-          FORMULA
-
-      # Pushes the formula branch, opens and merges its PR on gitkb/homebrew-tap alone.
       - name: Token to update gitkb/homebrew-tap
         id: tap-token
         uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
@@ -299,6 +343,8 @@ jobs:
           repositories: homebrew-tap
           permission-contents: write
           permission-pull-requests: write
+          # To wait for the tap's formula-test run before merging.
+          permission-actions: read
 
       - name: Push to Homebrew tap
         env:
@@ -327,8 +373,26 @@ jobs:
                 --body "Automated formula update from gitkb-core release v${VERSION}." \
                 --repo gitkb/homebrew-tap
             fi
+            # The tap requires no status check, so wait here for its
+            # formula-test run (install, `brew test`, `--version`) on this
+            # exact commit, and merge only that commit once it passes.
+            head="$(git rev-parse HEAD)"
+            run_id=""
+            for _ in $(seq 1 60); do
+              run_id="$(gh run list --repo gitkb/homebrew-tap --workflow formula-test.yml \
+                --branch "$BRANCH" --json databaseId,headSha \
+                -q "map(select(.headSha == \"$head\")) | first | .databaseId // empty")"
+              [ -n "$run_id" ] && break
+              sleep 10
+            done
+            if [ -z "$run_id" ]; then
+              echo "::error::formula-test did not start for $head on gitkb/homebrew-tap"
+              exit 1
+            fi
+            gh run watch "$run_id" --repo gitkb/homebrew-tap --exit-status
             gh pr merge "$BRANCH" \
               --squash \
+              --match-head-commit "$head" \
               --repo gitkb/homebrew-tap
           else
             echo "Formula unchanged, skipping commit"

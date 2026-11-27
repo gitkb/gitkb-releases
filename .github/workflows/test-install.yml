@@ -1,10 +1,14 @@
 name: Test Install Script
 
 on:
-  # Auto-trigger after every new release
-  workflow_run:
-    workflows: ["Mirror Release"]
-    types: [completed]
+  # Called by Mirror Release once a release's assets are public, with that
+  # release's version, so the release that was uploaded is the one tested.
+  workflow_call:
+    inputs:
+      version:
+        description: "Version to install (e.g. 1.0.0)."
+        required: true
+        type: string
 
   # Test PRs that touch the installer
   pull_request:
@@ -18,14 +22,15 @@ on:
         required: false
         default: ""
 
+# The jobs run downloaded binaries with this token present: read only.
+permissions:
+  contents: read
+
 jobs:
   # ---------------------------------------------------------------------------
   # Linux — Docker containers give a clean, minimal environment
   # ---------------------------------------------------------------------------
   test-linux:
-    if: >-
-      github.event_name != 'workflow_run' ||
-      github.event.workflow_run.conclusion == 'success'
     strategy:
       fail-fast: false
       matrix:
@@ -55,7 +60,7 @@ jobs:
       - name: Run install.sh in Docker
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          INPUT_VERSION: ${{ github.event.inputs.version }}
+          INPUT_VERSION: ${{ inputs.version }}
         run: |
           docker run --rm \
             -e GITHUB_TOKEN \
@@ -80,6 +85,14 @@ jobs:
               # --- Assertions ---------------------------------------------------
               test -f "$HOME/.local/bin/git-kb" || { echo "FAIL: binary not found"; exit 1; }
               "$HOME/.local/bin/git-kb" --version     # proves correct arch + no missing libs
+              # Releases from 1.0.0 must install the extensions; git-kb reaches them on PATH.
+              major="$("$HOME/.local/bin/git-kb" --version | head -n 1 | sed -E "s/^[^0-9]*([0-9]+).*/\1/")"
+              if [ "$major" -ge 1 ]; then
+                for ext in code semantic; do
+                  test -f "$HOME/.local/bin/git-kb-$ext" || { echo "FAIL: git-kb-$ext not installed"; exit 1; }
+                  PATH="$HOME/.local/bin:$PATH" git-kb "$ext" --version
+                done
+              fi
 
               # No unbound variable errors or other stderr noise.
               # Filter known-harmless tar warnings about unknown xattr headers
@@ -97,9 +110,6 @@ jobs:
   # macOS — native runners (can't use Docker on macOS)
   # ---------------------------------------------------------------------------
   test-macos:
-    if: >-
-      github.event_name != 'workflow_run' ||
-      github.event.workflow_run.conclusion == 'success'
     strategy:
       fail-fast: false
       matrix:
@@ -124,13 +134,21 @@ jobs:
 
       - name: Run install.sh
         env:
-          VERSION: ${{ github.event.inputs.version || 'latest' }}
+          VERSION: ${{ inputs.version || 'latest' }}
         run: bash install.sh 2>/tmp/install_stderr.log
 
       - name: Verify installation
         run: |
           test -f "$HOME/.local/bin/git-kb" || { echo "FAIL: binary not found"; exit 1; }
           "$HOME/.local/bin/git-kb" --version
+          # Releases from 1.0.0 must install the extensions; git-kb reaches them on PATH.
+          major="$("$HOME/.local/bin/git-kb" --version | head -n 1 | sed -E 's/^[^0-9]*([0-9]+).*/\1/')"
+          if [ "$major" -ge 1 ]; then
+            for ext in code semantic; do
+              test -f "$HOME/.local/bin/git-kb-$ext" || { echo "FAIL: git-kb-$ext not installed"; exit 1; }
+              PATH="$HOME/.local/bin:$PATH" git-kb "$ext" --version
+            done
+          fi
 
           # No unbound variable errors or other stderr noise.
           # Filter known-harmless tar warnings about unknown xattr headers
@@ -158,7 +176,7 @@ jobs:
           echo "macos:  ${{ needs.test-macos.result }}"
           if [[ "${{ needs.test-linux.result }}" == "skipped" && \
                 "${{ needs.test-macos.result }}" == "skipped" ]]; then
-            echo "Tests skipped (upstream workflow did not succeed)."
+            echo "Tests skipped."
             exit 0
           fi
           # Treat skipped as acceptable when paired with success
