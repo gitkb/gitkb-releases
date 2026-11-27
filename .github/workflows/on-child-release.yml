@@ -152,7 +152,7 @@ jobs:
           PAYLOAD=$(jq -n \
             --arg title "GitKB $TAG Released" \
             --arg desc "A new version of GitKB is available." \
-            --arg install_sh 'curl -fsSL https://raw.githubusercontent.com/gitkb/gitkb-releases/main/install.sh | sh' \
+            --arg install_sh 'curl -fsSL https://raw.githubusercontent.com/gitkb/gitkb-releases/main/install.sh | bash' \
             --arg install_brew 'brew install gitkb/tap/gitkb' \
             --arg url "https://github.com/gitkb/gitkb-releases/releases/tag/$TAG" \
             '{
@@ -250,6 +250,12 @@ jobs:
             fi
             echo "$digest"
           }
+          # Releases from 1.0.0 ship the extensions; earlier ones have code
+          # intelligence built into git-kb and a core-only formula.
+          extensions=""
+          if [ "${VERSION%%.*}" -ge 1 ]; then
+            extensions="code semantic"
+          fi
           platform_block() {
             local platform="$1"
             # The shell's version, not Ruby's `#{version}`: inside a resource
@@ -259,7 +265,7 @@ jobs:
             sum=$(sha "gitkb-${platform}.tar.gz")
             echo "      url \"${base}/gitkb-${platform}.tar.gz\""
             echo "      sha256 \"${sum}\""
-            for ext in code semantic; do
+            for ext in $extensions; do
               sum=$(sha "gitkb-${ext}-${platform}.tar.gz")
               echo ""
               echo "      resource \"git-kb-${ext}\" do"
@@ -298,15 +304,18 @@ jobs:
             echo ''
             echo '  def install'
             echo '    bin.install "git-kb"'
-            echo '    %w[git-kb-code git-kb-semantic].each do |name|'
-            echo '      resource(name).stage { bin.install name }'
-            echo '    end'
+            if [ -n "$extensions" ]; then
+              echo '    %w[git-kb-code git-kb-semantic].each do |name|'
+              echo '      resource(name).stage { bin.install name }'
+              echo '    end'
+            fi
             echo '  end'
             echo ''
             echo '  test do'
             echo '    system "#{bin}/git-kb", "--version"'
-            echo '    system "#{bin}/git-kb-code", "--version"'
-            echo '    system "#{bin}/git-kb-semantic", "--version"'
+            for ext in $extensions; do
+              echo "    system \"#{bin}/git-kb-${ext}\", \"--version\""
+            done
             echo '  end'
             echo 'end'
           } > gitkb.rb
