@@ -331,6 +331,8 @@ jobs:
           repositories: homebrew-tap
           permission-contents: write
           permission-pull-requests: write
+          # To wait for the tap's formula-test run before merging.
+          permission-actions: read
 
       - name: Push to Homebrew tap
         env:
@@ -359,8 +361,26 @@ jobs:
                 --body "Automated formula update from gitkb-core release v${VERSION}." \
                 --repo gitkb/homebrew-tap
             fi
+            # The tap requires no status check, so wait here for its
+            # formula-test run (install, `brew test`, `--version`) on this
+            # exact commit, and merge only that commit once it passes.
+            head="$(git rev-parse HEAD)"
+            run_id=""
+            for _ in $(seq 1 60); do
+              run_id="$(gh run list --repo gitkb/homebrew-tap --workflow formula-test.yml \
+                --branch "$BRANCH" --json databaseId,headSha \
+                -q "map(select(.headSha == \"$head\")) | first | .databaseId // empty")"
+              [ -n "$run_id" ] && break
+              sleep 10
+            done
+            if [ -z "$run_id" ]; then
+              echo "::error::formula-test did not start for $head on gitkb/homebrew-tap"
+              exit 1
+            fi
+            gh run watch "$run_id" --repo gitkb/homebrew-tap --exit-status
             gh pr merge "$BRANCH" \
               --squash \
+              --match-head-commit "$head" \
               --repo gitkb/homebrew-tap
           else
             echo "Formula unchanged, skipping commit"

@@ -221,8 +221,12 @@ install_gitkb() {
         check_binary "${stage_dir}/$(basename "$binary")"
     done
 
+    # The extensions go in first and git-kb last, so a failure part-way
+    # never leaves a new git-kb that dispatches to extensions not installed.
     info "Installing to ${INSTALL_DIR}..."
-    for binary in "${binaries[@]}"; do
+    local i
+    for (( i = ${#binaries[@]} - 1; i >= 0; i-- )); do
+        binary="${binaries[$i]}"
         mv -f "${stage_dir}/$(basename "$binary")" "$INSTALL_DIR/"
         info "Installed $(basename "$binary")"
     done
