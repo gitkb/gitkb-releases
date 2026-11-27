@@ -23,9 +23,12 @@ jobs:
   # Linux — Docker containers give a clean, minimal environment
   # ---------------------------------------------------------------------------
   test-linux:
+    # A Mirror Release run that failed after publishing (the Homebrew tap's
+    # smoke test, say) still published the release, so it is tested too.
     if: >-
       github.event_name != 'workflow_run' ||
-      github.event.workflow_run.conclusion == 'success'
+      github.event.workflow_run.conclusion == 'success' ||
+      github.event.workflow_run.conclusion == 'failure'
     strategy:
       fail-fast: false
       matrix:
@@ -105,9 +108,12 @@ jobs:
   # macOS — native runners (can't use Docker on macOS)
   # ---------------------------------------------------------------------------
   test-macos:
+    # A Mirror Release run that failed after publishing (the Homebrew tap's
+    # smoke test, say) still published the release, so it is tested too.
     if: >-
       github.event_name != 'workflow_run' ||
-      github.event.workflow_run.conclusion == 'success'
+      github.event.workflow_run.conclusion == 'success' ||
+      github.event.workflow_run.conclusion == 'failure'
     strategy:
       fail-fast: false
       matrix:
