@@ -74,6 +74,16 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+  # The installer on Linux and macOS, against the release just uploaded.
+  # It depends on the upload alone, so a later Homebrew failure never skips it.
+  test-install:
+    name: Test install
+    needs: mirror-release
+    uses: ./.github/workflows/test-install.yml
+    with:
+      version: ${{ needs.mirror-release.outputs.version }}
+    secrets: inherit
+
   # Dependents that pin git-kb's releases from here get dep-update with this
   # version once the public release and its assets exist. This repo is public
   # and can't call the private gitkb/workflows, so it sends the dispatch

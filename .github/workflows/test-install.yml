@@ -1,10 +1,14 @@
 name: Test Install Script
 
 on:
-  # Auto-trigger after every new release
-  workflow_run:
-    workflows: ["Mirror Release"]
-    types: [completed]
+  # Called by Mirror Release once a release's assets are public, with that
+  # release's version, so the release that was uploaded is the one tested.
+  workflow_call:
+    inputs:
+      version:
+        description: "Version to install (e.g. 1.0.0)."
+        required: true
+        type: string
 
   # Test PRs that touch the installer
   pull_request:
@@ -23,12 +27,6 @@ jobs:
   # Linux — Docker containers give a clean, minimal environment
   # ---------------------------------------------------------------------------
   test-linux:
-    # A Mirror Release run that failed after publishing (the Homebrew tap's
-    # smoke test, say) still published the release, so it is tested too.
-    if: >-
-      github.event_name != 'workflow_run' ||
-      github.event.workflow_run.conclusion == 'success' ||
-      github.event.workflow_run.conclusion == 'failure'
     strategy:
       fail-fast: false
       matrix:
@@ -58,7 +56,7 @@ jobs:
       - name: Run install.sh in Docker
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          INPUT_VERSION: ${{ github.event.inputs.version }}
+          INPUT_VERSION: ${{ inputs.version }}
         run: |
           docker run --rm \
             -e GITHUB_TOKEN \
@@ -108,12 +106,6 @@ jobs:
   # macOS — native runners (can't use Docker on macOS)
   # ---------------------------------------------------------------------------
   test-macos:
-    # A Mirror Release run that failed after publishing (the Homebrew tap's
-    # smoke test, say) still published the release, so it is tested too.
-    if: >-
-      github.event_name != 'workflow_run' ||
-      github.event.workflow_run.conclusion == 'success' ||
-      github.event.workflow_run.conclusion == 'failure'
     strategy:
       fail-fast: false
       matrix:
@@ -138,7 +130,7 @@ jobs:
 
       - name: Run install.sh
         env:
-          VERSION: ${{ github.event.inputs.version || 'latest' }}
+          VERSION: ${{ inputs.version || 'latest' }}
         run: bash install.sh 2>/tmp/install_stderr.log
 
       - name: Verify installation
@@ -180,7 +172,7 @@ jobs:
           echo "macos:  ${{ needs.test-macos.result }}"
           if [[ "${{ needs.test-linux.result }}" == "skipped" && \
                 "${{ needs.test-macos.result }}" == "skipped" ]]; then
-            echo "Tests skipped (upstream workflow did not succeed)."
+            echo "Tests skipped."
             exit 0
           fi
           # Treat skipped as acceptable when paired with success
